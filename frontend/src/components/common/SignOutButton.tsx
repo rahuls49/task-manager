@@ -1,14 +1,15 @@
 "use client"
 
 import { signOut } from "next-auth/react"
+import { DropdownMenuItem } from "../ui/dropdown-menu"
 
 export default function SignOutButton() {
   return (
-    <button
+    <DropdownMenuItem
       onClick={() => signOut()}
-      className="bg-red-500 text-white px-4 py-2 rounded"
+      className="flex items-center gap-2 cursor-pointer bg-red-600 focus:bg-red-600 text-white text-center"
     >
       Sign Out
-    </button>
+    </DropdownMenuItem>
   )
 }
