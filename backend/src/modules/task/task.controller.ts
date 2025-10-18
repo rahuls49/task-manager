@@ -31,6 +31,7 @@ export async function getTasks(req: Request, res: Response, next: NextFunction) 
         return res.status(404).json({success : false, message: "No task available"});
     }
     const taskTree = buildTaskTree(tasks);
+    console.log({userid: req.user?.id})
     return res.json({success : true, message: "Tasks fetched successfully", data : taskTree});
 }
 
@@ -76,7 +77,7 @@ export async function updateTask(req: Request, res: Response, next: NextFunction
 
 export async function deleteTask(req: Request, res: Response, next: NextFunction) {
     const { id } = req.params;
-    const is_deleted = await taskService.deleteTask(id);
+    const is_deleted = await taskService.deleteTask(id, req.user?.id as string);
     if (!is_deleted) {
         return res.status(404).json({success : false, message: "Task not found"});
     }

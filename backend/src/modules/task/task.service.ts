@@ -65,7 +65,7 @@ export async function updateTask(taskId: string, payload: Record<string, any>) {
     return rows;
 }
 
-export async function deleteTask(taskId: string) {
+export async function deleteTask(taskId: string, userid: string) {
     const [rows] = await pool.execute(`Delete FROM TaskMaster WHERE Id = ?`, [taskId]);
     return (rows as any)?.affectedRows > 0;
 }
