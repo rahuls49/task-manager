@@ -21,7 +21,7 @@ declare global {
 export default function verifyAuthToken(req: Request, res: Response, next: NextFunction) {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return res.status(401).json({ error: 'Unauthorized' });
+        return res.status(401).json({ success: false, error: 'Unauthorized Request' });
     }
 
     const token = authHeader.split(' ')[1];
