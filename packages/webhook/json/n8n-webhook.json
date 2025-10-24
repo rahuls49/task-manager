@@ -1,0 +1,11 @@
+[
+  {
+    "url": "https://your-n8n-instance.com/webhook/your-webhook-id",
+    "method": "POST",
+    "headers": {
+      "Content-Type": "application/json",
+      "X-API-Key": "your-n8n-api-key-if-needed"
+    },
+    "timeout": 10000
+  }
+]

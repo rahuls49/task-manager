@@ -104,7 +104,7 @@ export async function createTask(req: Request, res: Response, next: NextFunction
 
     const taskId = await taskService.createTask(taskData, userId);
     const createdTask = await taskService.getTaskById(taskId);
-    await eventHandler(createdTask, "create-task-event");
+    eventHandler(createdTask, "create-task-event");
     return res.status(201).json({
       success: true,
       message: "Task created successfully",

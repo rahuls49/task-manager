@@ -1,5 +1,18 @@
 {
-	"devDependencies": {
-		"@types/node": "^24.9.1"
-	}
+  "name": "task-manager",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "turbo run dev --parallel",
+    "build": "turbo run build",
+    "start": "turbo run start --parallel",
+    "init:db": "ts-node --transpile-only --compiler-options \"{\\\"module\\\":\\\"CommonJS\\\"}\" scripts/initDatabases.ts",
+    "clean": "rm -rf node_modules && rm -rf apps/*/node_modules && rm -rf packages/*/node_modules"
+  },
+  "devDependencies": {
+    "@types/node": "^24.9.1"
+  },
+  "dependencies": {
+    "turbo": "^2.5.8"
+  },
+  "packageManager": "pnpm@10.18.1"
 }

@@ -78,6 +78,12 @@ export const VALIDATION_RULES = {
   MAX_SUBTASK_DEPTH: 10
 } as const;
 
+type DUE_TIME_INTERVAL_UNIT = 'HOUR' | 'DAY' | 'WEEK' | 'MONTH' | 'YEAR';
+
+// Time interval constants for due time queries
+export const DUE_TIME_INTERVAL_VALUE: number = 1;
+export const DUE_TIME_INTERVAL_UNIT = 'HOUR';
+
 // Task events for logging and notifications
 export const TASK_EVENTS = {
   CREATED: 'task_created',
@@ -137,10 +143,8 @@ export const SQL_QUERIES = {
     SELECT * FROM Tasks 
     WHERE IsDeleted = FALSE 
     AND StatusId != ? 
-    AND (
-      (DueDate < CURDATE()) OR 
-      (DueDate = CURDATE() AND DueTime < CURTIME())
-    )
+    AND CONCAT(DueDate, ' ', DueTime) >= NOW() 
+    AND CONCAT(DueDate, ' ', DueTime) <= DATE_ADD(NOW(), INTERVAL ${DUE_TIME_INTERVAL_VALUE} ${DUE_TIME_INTERVAL_UNIT})
   `,
   
   GET_ESCALATION_CANDIDATES: `

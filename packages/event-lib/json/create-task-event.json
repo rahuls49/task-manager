@@ -14,5 +14,14 @@
     "parameters": {
       "name": "value"
     }
+  },
+  {
+    "endpoint": "https://wassraipur.apps.shreeshivam.net:9006/send/message",
+    "api-key": "",
+    "http-method": "POST",
+    "parameters": {
+      "phone": "919200010801",
+      "message":"Task Created Successfully!"
+    }
   }
 ]
