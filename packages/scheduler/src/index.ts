@@ -25,38 +25,45 @@ async function fetchDueTasks(): Promise<dueTasksResponse> {
 
 const scheduledTasks = new Set<number>();
 
-cron.schedule(SCHEDULER_CRON, async () => {
-  console.log("⏰ Running scheduler at", new Date().toLocaleString());
+try {
+  cron.schedule(SCHEDULER_CRON, async () => {
+    console.log("⏰ Running scheduler at", new Date().toLocaleString());
 
-  const res = await fetchDueTasks();
-  if (res.success && res.data && res.data.length > 0) {
-    console.log(`📋 Found ${res.data.length} due task(s)`);
-    
-    for (const task of res.data) {
-      if (!scheduledTasks.has(task.Id)) {
-        // Get the due timestamp
-        const dueTs = getDueTimestamp(task);
-        const now = Date.now();
-        const delay = dueTs ? Math.max(dueTs - now, 0) : 0;
-        
-        console.log(`🔍 Task ${task.Id} "${task.Title}": Due at ${dueTs ? new Date(dueTs).toLocaleString() : 'unknown'}, Current time: ${new Date(now).toLocaleString()}, Delay: ${Math.round(delay / 1000)}s`);
-        
-        // Only add to queue if task is due within the configured max delay
-        if (delay <= MAX_SCHEDULING_DELAY_MS) {
-          await addTaskToQueue(task);
-          scheduledTasks.add(task.Id);
-          console.log(`✅ Task ${task.Id} added to queue with ${Math.round(delay/1000)}s delay`);
+    const res = await fetchDueTasks();
+    if (res.success && res.data && res.data.length > 0) {
+      console.log(`📋 Found ${res.data.length} due task(s)`);
+      
+      for (const task of res.data) {
+        if (!scheduledTasks.has(task.Id)) {
+          // Get the due timestamp
+          const dueTs = getDueTimestamp(task);
+          const now = Date.now();
+          const delay = dueTs ? Math.max(dueTs - now, 0) : 0;
+          
+          console.log(`🔍 Task ${task.Id} "${task.Title}": Due at ${dueTs ? new Date(dueTs).toLocaleString() : 'unknown'}, Current time: ${new Date(now).toLocaleString()}, Delay: ${Math.round(delay / 1000)}s`);
+          
+          // Only add to queue if task is due within the configured max delay
+          if (delay <= MAX_SCHEDULING_DELAY_MS) {
+            await addTaskToQueue(task);
+            scheduledTasks.add(task.Id);
+            console.log(`✅ Task ${task.Id} added to queue with ${Math.round(delay/1000)}s delay`);
+          } else {
+            console.log(`⏳ Task ${task.Id} not yet due (${Math.round(delay/1000)}s remaining, max: ${Math.round(MAX_SCHEDULING_DELAY_MS/1000)}s), skipping`);
+          }
         } else {
-          console.log(`⏳ Task ${task.Id} not yet due (${Math.round(delay/1000)}s remaining, max: ${Math.round(MAX_SCHEDULING_DELAY_MS/1000)}s), skipping`);
+          console.log(`🔄 Task ${task.Id} already scheduled, skipping`);
         }
-      } else {
-        console.log(`🔄 Task ${task.Id} already scheduled, skipping`);
       }
+    } else {
+      console.log("📭 No due tasks found.");
     }
-  } else {
-    console.log("📭 No due tasks found.");
-  }
-});
+  });
+  console.log(`🧠 Scheduler started with cron schedule: ${SCHEDULER_CRON}`);
+  console.log(`📋 Max scheduling delay: ${Math.round(MAX_SCHEDULING_DELAY_MS/1000/60)} minutes`);
+  console.log("⏰ Waiting for next scheduled run...");
+} catch (error) {
+  console.error("❌ Error starting scheduler:", error);
+}
 
 function getDueTimestamp(task: any): number | undefined {
   // Try combined first to use DueDate date + DueTime time
@@ -98,7 +105,3 @@ function getDueTimestamp(task: any): number | undefined {
   }
   return undefined;
 }
-
-console.log(`🧠 Scheduler started with cron schedule: ${SCHEDULER_CRON}`);
-console.log(`📋 Max scheduling delay: ${Math.round(MAX_SCHEDULING_DELAY_MS/1000/60)} minutes`);
-console.log("⏰ Waiting for next scheduled run...");

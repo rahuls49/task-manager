@@ -36,6 +36,35 @@ export async function getTaskStatuses(req: Request, res: Response, next: NextFun
   }
 }
 
+export async function createTaskStatus(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { statusName } = req.body;
+    
+    if (!statusName) {
+      return res.status(400).json({
+        success: false,
+        message: "Status name is required"
+      });
+    }
+    
+    const statusId = await taskInit.createTaskStatus(statusName);
+    
+    return res.status(201).json({
+      success: true,
+      message: "Task status created successfully",
+      data: { id: statusId, statusName }
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('Duplicate entry')) {
+      return res.status(400).json({
+        success: false,
+        message: "Status name already exists"
+      });
+    }
+    next(error);
+  }
+}
+
 // ============================================================================
 // TASK PRIORITIES MANAGEMENT
 // ============================================================================
@@ -50,6 +79,35 @@ export async function getTaskPriorities(req: Request, res: Response, next: NextF
       data: priorities
     });
   } catch (error) {
+    next(error);
+  }
+}
+
+export async function createTaskPriority(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { priorityName } = req.body;
+    
+    if (!priorityName) {
+      return res.status(400).json({
+        success: false,
+        message: "Priority name is required"
+      });
+    }
+    
+    const priorityId = await taskInit.createTaskPriority(priorityName);
+    
+    return res.status(201).json({
+      success: true,
+      message: "Task priority created successfully",
+      data: { id: priorityId, priorityName }
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('Duplicate entry')) {
+      return res.status(400).json({
+        success: false,
+        message: "Priority name already exists"
+      });
+    }
     next(error);
   }
 }

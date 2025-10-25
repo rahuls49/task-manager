@@ -2,7 +2,9 @@ import { Router } from "express";
 import {
   initializeSystem,
   getTaskStatuses,
+  createTaskStatus,
   getTaskPriorities,
+  createTaskPriority,
   getAssignees,
   createAssignee,
   getGroups,
@@ -29,8 +31,14 @@ managementRouter.post('/initialize', initializeSystem);
 // Task statuses
 managementRouter.get('/statuses', getTaskStatuses);
 
+// Create new status
+managementRouter.post('/statuses', createTaskStatus);
+
 // Task priorities
 managementRouter.get('/priorities', getTaskPriorities);
+
+// Create new priority
+managementRouter.post('/priorities', createTaskPriority);
 
 // ============================================================================
 // ASSIGNEE MANAGEMENT

@@ -144,11 +144,33 @@ export async function getTaskStatuses(): Promise<any[]> {
 }
 
 /**
+ * Create a new task status
+ */
+export async function createTaskStatus(statusName: string): Promise<number> {
+  const [result] = await pool.execute<ResultSetHeader>(
+    'INSERT INTO TaskStatus (StatusName) VALUES (?)',
+    [statusName]
+  );
+  return result.insertId;
+}
+
+/**
  * Get all task priorities
  */
 export async function getTaskPriorities(): Promise<any[]> {
   const [rows] = await pool.execute<RowDataPacket[]>('SELECT * FROM TaskPriority ORDER BY Id');
   return rows;
+}
+
+/**
+ * Create a new task priority
+ */
+export async function createTaskPriority(priorityName: string): Promise<number> {
+  const [result] = await pool.execute<ResultSetHeader>(
+    'INSERT INTO TaskPriority (PriorityName) VALUES (?)',
+    [priorityName]
+  );
+  return result.insertId;
 }
 
 /**

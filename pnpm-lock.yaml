@@ -172,12 +172,15 @@ importers:
 
   packages/scheduler:
     dependencies:
-      '@task-manager/queue-lib':
-        specifier: workspace:*
-        version: link:../queue-lib
+      bullmq:
+        specifier: ^5.61.2
+        version: 5.61.2
       dotenv:
         specifier: ^17.2.3
         version: 17.2.3
+      ioredis:
+        specifier: ^5.8.2
+        version: 5.8.2
       node-cron:
         specifier: ^4.2.1
         version: 4.2.1

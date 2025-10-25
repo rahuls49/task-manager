@@ -3,13 +3,14 @@ module.exports = {
     {
       name: 'task-manager-backend',
       script: 'backend/dist/index.js',
-      cwd: '~/task-manager',  // Replace with your actual project path
+      cwd: '',  // Replace with your actual project path
       env: {
         NODE_ENV: 'production',
         PORT: 5000,
         MYSQL_HOST:"172.27.60.2",
         MYSQL_USER:"developer",
         MYSQL_PASSWORD:"dev@1234",
+        MYSQL_DATABASE:"task_manager",
         JWT_SECRET:"e014e68503efee67394248e852ae1db8a0e5b1d58f0791ece5de724d93188b23",
         DUE_TIME_INTERVAL_VALUE:2,
         DUE_TIME_INTERVAL_UNIT:"MINUTE",
@@ -36,8 +37,8 @@ module.exports = {
     // },
     {
       name: 'task-manager-scheduler',
-      script: 'packages/scheduler/dist/index.js',
-      cwd: '~/task-manager',
+      script: 'packages/scheduler/dist/scheduler/src/index.js',
+      cwd: '',
       env: {
         NODE_ENV: 'production',
         BACKEND_API_BASE_URL:"http://localhost:5000",
@@ -51,7 +52,7 @@ module.exports = {
     {
       name: 'task-manager-queue-worker',
       script: 'packages/queue-lib/dist/worker.js',
-      cwd: '~/task-manager',
+      cwd: '',
       env: {
         NODE_ENV: 'production',
         REDIS_HOST:"172.27.60.2",

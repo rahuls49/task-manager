@@ -6,14 +6,16 @@
   "scripts": {
     "build": "tsc",
     "dev": "ts-node-dev src/index.ts",
-    "start": "node dist/index.js"
+    "start": "node dist/scheduler/src/index.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "packageManager": "pnpm@10.18.1",
   "dependencies": {
+    "bullmq": "^5.61.2",
     "dotenv": "^17.2.3",
+    "ioredis": "^5.8.2",
     "node-cron": "^4.2.1",
     "typescript": "^5.9.3"
   },
