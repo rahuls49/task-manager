@@ -12,11 +12,11 @@ module.exports = {
         MYSQL_PASSWORD:"dev@1234",
         JWT_SECRET:"e014e68503efee67394248e852ae1db8a0e5b1d58f0791ece5de724d93188b23",
         DUE_TIME_INTERVAL_VALUE:2,
-        DUE_TIME_INTERVAL_UNIT:MINUTE,
+        DUE_TIME_INTERVAL_UNIT:"MINUTE",
         DUE_TASKS_WINDOW_VALUE:2,
-        DUE_TASKS_WINDOW_UNIT:MINUTE,
+        DUE_TASKS_WINDOW_UNIT:"MINUTE",
         DUE_TASKS_BUFFER_VALUE:1,
-        DUE_TASKS_BUFFER_UNIT:MINUTE
+        DUE_TASKS_BUFFER_UNIT:"MINUTE"
       },
       instances: 1,  // Single instance for backend
       autorestart: true,
