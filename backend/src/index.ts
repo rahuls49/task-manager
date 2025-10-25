@@ -5,6 +5,7 @@ import taskRouter from './modules/task/task.route';
 import authRouter from './modules/auth/auth.route';
 import verifyAuthToken from './middlewares/auth-middleware';
 import managementRouter from './modules/task/task.management.route';
+import taskSystemRouter from './modules/task/task.system.route';
 
 const app = express();
 const port:number = parseInt(process.env.PORT as string || "5000");
@@ -14,6 +15,7 @@ app.use(express.json());
 app.use(globalErrorHandler);
 
 app.use('/tasks', verifyAuthToken, taskRouter);
+app.use('/system', taskSystemRouter);
 app.use('/auth', authRouter);
 app.use('/management', managementRouter);
 

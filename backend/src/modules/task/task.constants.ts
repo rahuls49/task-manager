@@ -78,11 +78,28 @@ export const VALIDATION_RULES = {
   MAX_SUBTASK_DEPTH: 10
 } as const;
 
-type DUE_TIME_INTERVAL_UNIT = 'HOUR' | 'DAY' | 'WEEK' | 'MONTH' | 'YEAR';
+type DUE_TIME_INTERVAL_UNIT = 'SECOND' | 'MINUTE' | 'HOUR' | 'DAY' | 'WEEK' | 'MONTH' | 'YEAR';
 
-// Time interval constants for due time queries
-export const DUE_TIME_INTERVAL_VALUE: number = 1;
-export const DUE_TIME_INTERVAL_UNIT = 'HOUR';
+// Time interval constants for due time queries - CONFIGURABLE
+export const DUE_TIME_INTERVAL_VALUE: number = parseInt(process.env.DUE_TIME_INTERVAL_VALUE || '30');
+export const DUE_TIME_INTERVAL_UNIT: DUE_TIME_INTERVAL_UNIT = (process.env.DUE_TIME_INTERVAL_UNIT as DUE_TIME_INTERVAL_UNIT) || 'MINUTE';
+
+// Scheduler-specific configuration
+export const SCHEDULER_CONFIG = {
+  // How often the scheduler runs (in cron format)
+  CRON_SCHEDULE: process.env.SCHEDULER_CRON || '*/2 * * * *', // Default: every 2 minutes
+  
+  // Time window for fetching due tasks
+  DUE_TASKS_WINDOW_VALUE: parseInt(process.env.DUE_TASKS_WINDOW_VALUE || '30'),
+  DUE_TASKS_WINDOW_UNIT: (process.env.DUE_TASKS_WINDOW_UNIT as DUE_TIME_INTERVAL_UNIT) || 'MINUTE',
+  
+  // Buffer time (how early to start looking for tasks)
+  DUE_TASKS_BUFFER_VALUE: parseInt(process.env.DUE_TASKS_BUFFER_VALUE || '1'),
+  DUE_TASKS_BUFFER_UNIT: (process.env.DUE_TASKS_BUFFER_UNIT as DUE_TIME_INTERVAL_UNIT) || 'MINUTE',
+  
+  // Maximum delay before scheduling a task (in milliseconds)
+  MAX_SCHEDULING_DELAY_MS: parseInt(process.env.MAX_SCHEDULING_DELAY_MS || '1800000') // Default: 30 minutes
+} as const;
 
 // Task events for logging and notifications
 export const TASK_EVENTS = {
@@ -143,8 +160,7 @@ export const SQL_QUERIES = {
     SELECT * FROM Tasks 
     WHERE IsDeleted = FALSE 
     AND StatusId != ? 
-    AND CONCAT(DueDate, ' ', DueTime) >= NOW() 
-    AND CONCAT(DueDate, ' ', DueTime) <= DATE_ADD(NOW(), INTERVAL ${DUE_TIME_INTERVAL_VALUE} ${DUE_TIME_INTERVAL_UNIT})
+    AND CONCAT(DueDate, ' ', DueTime) <= UTC_TIMESTAMP()
   `,
   
   GET_ESCALATION_CANDIDATES: `

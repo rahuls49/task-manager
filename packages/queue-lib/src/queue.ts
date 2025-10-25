@@ -8,12 +8,24 @@ export async function addTaskToQueue(task: any) {
   function getDueTimestamp(t: any): number | undefined {
     // 1) Separate date and time fields (e.g., DueDate (date-only) + DueTime)
     if (t?.DueDate && t?.DueTime) {
-      // Try to combine them into an ISO-ish string
       try {
-        const combined = new Date(`${t.DueDate.split('T')[0]}T${t.DueTime}`);
-        if (!Number.isNaN(combined.getTime())) return combined.getTime();
+        // Extract just the date part (YYYY-MM-DD)
+        const dateStr = t.DueDate.split('T')[0];
+        // Ensure DueTime is in HH:MM:SS format
+        let timeStr = t.DueTime;
+        if (timeStr.length === 5) { // HH:MM format
+          timeStr = timeStr + ':00'; // Convert to HH:MM:SS
+        }
+        
+        // Combine date and time into a proper UTC ISO string
+        const combinedStr = `${dateStr}T${timeStr}Z`; // Adding Z to indicate UTC
+        const combined = new Date(combinedStr);
+        
+        if (!Number.isNaN(combined.getTime())) {
+          return combined.getTime();
+        }
       } catch (e) {
-        // fallthrough
+        console.error('Error parsing date/time in queue:', e);
       }
     }
 
@@ -38,9 +50,12 @@ export async function addTaskToQueue(task: any) {
   }
 
   const dueTs = getDueTimestamp(task);
+  const now = Date.now();
   let delay: number;
+  
   if (typeof dueTs === 'number' && Number.isFinite(dueTs)) {
-    delay = Math.max(dueTs - Date.now(), 0);
+    delay = Math.max(dueTs - now, 0);
+    console.log(`📅 Task due at: ${new Date(dueTs).toLocaleString()}, Current: ${new Date(now).toLocaleString()}, Delay: ${Math.round(delay / 1000)}s`);
   } else {
     // Fallback: schedule immediately but warn
     delay = 0;
@@ -54,8 +69,8 @@ export async function addTaskToQueue(task: any) {
   }
 
   try {
-    await taskQueue.add('dueTask', { ...task, __scheduledAt: Date.now() }, { delay });
-    console.log(`✅ Task "${task?.Title ?? task?.title ?? task?.Id ?? 'unknown'}" scheduled to run in ${Math.round(delay / 1000)} sec`);
+    await taskQueue.add('dueTask', { ...task, __scheduledAt: now }, { delay });
+    console.log(`✅ Task "${task?.Title ?? task?.title ?? task?.Id ?? 'unknown'}" scheduled to run in ${Math.round(delay / 1000)} seconds`);
   } catch (error) {
     console.error('❌ Failed to add task to queue:', error);
   }

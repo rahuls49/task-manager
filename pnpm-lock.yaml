@@ -175,6 +175,9 @@ importers:
       '@task-manager/queue-lib':
         specifier: workspace:*
         version: link:../queue-lib
+      dotenv:
+        specifier: ^17.2.3
+        version: 17.2.3
       node-cron:
         specifier: ^4.2.1
         version: 4.2.1

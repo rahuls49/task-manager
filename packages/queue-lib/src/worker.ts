@@ -4,11 +4,27 @@ import connection from './redis';
 console.log("Worker starting...");
 
 const worker = new Worker('taskQueue', async job => {
-  console.log(`Processing job: ${job.name} with data`, job.data);
-  // Perform the actual task here
-  console.log('Task completed in worker');
-  const res = await sendWhatsappMessage(job);
-  console.log({res})
+  const task = job.data;
+  const scheduledAt = task.__scheduledAt || 'unknown';
+  const actualProcessingTime = new Date().toLocaleString();
+  
+  console.log(`🚀 Processing job: ${job.name} for task "${task.Title}" (ID: ${task.Id})`);
+  console.log(`⏰ Scheduled at: ${new Date(scheduledAt).toLocaleString()}, Processing at: ${actualProcessingTime}`);
+  console.log(`📋 Task details:`, { 
+    Id: task.Id, 
+    Title: task.Title, 
+    DueDate: task.DueDate, 
+    DueTime: task.DueTime 
+  });
+  
+  try {
+    const res = await sendWhatsappMessage(job);
+    console.log('✅ WhatsApp message sent successfully:', res.status);
+    return { success: true, processedAt: actualProcessingTime };
+  } catch (error) {
+    console.error('❌ Failed to send WhatsApp message:', error);
+    throw error;
+  }
 }, { connection });
 
 console.log("Worker created");
@@ -34,7 +50,7 @@ async function sendWhatsappMessage(job: any) {
     },
     body: JSON.stringify({
       "phone": "917999800869",
-      "message": `Completed the task: ${job.data.Title}`
+      "message": `This task is overdue: ${job.data.Title}`
     })
   })
 }

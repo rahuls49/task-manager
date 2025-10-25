@@ -13,7 +13,7 @@
   "license": "ISC",
   "packageManager": "pnpm@10.18.1",
   "dependencies": {
-    "@task-manager/queue-lib": "workspace:*",
+    "dotenv": "^17.2.3",
     "node-cron": "^4.2.1",
     "typescript": "^5.9.3"
   },

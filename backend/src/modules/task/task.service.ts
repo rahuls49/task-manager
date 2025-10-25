@@ -300,6 +300,20 @@ export async function createTask(data: CreateTaskDto, userId?: number): Promise<
     throw new Error(`Validation failed: ${validation.errors.map(e => e.message).join(', ')}`);
   }
 
+  // Convert due date to UTC
+  if (data.dueDate) {
+    const time = data.dueTime || '00:00';
+    const dateTimeStr = `${data.dueDate}T${time}:00+05:30`;
+    const dateObj = new Date(dateTimeStr);
+    
+    // Store date and time components separately in UTC
+    const utcISOString = dateObj.toISOString();
+    data.dueDate = utcISOString.split('T')[0]; // YYYY-MM-DD in UTC
+    data.dueTime = utcISOString.split('T')[1].split('.')[0]; // HH:MM:SS in UTC
+    
+    console.log(`📅 Task creation: Input ${data.dueDate}T${time} IST -> Stored as ${data.dueDate} ${data.dueTime} UTC`);
+  }
+
   // Check for circular dependency if parent task is specified
   if (data.parentTaskId) {
     const parentTask = await getTaskById(data.parentTaskId);
@@ -582,7 +596,7 @@ async function assignTaskToUsers(connection: any, taskId: number, assignData: As
   if (assignData.assigneeIds && assignData.assigneeIds.length > 0) {
     for (const assigneeId of assignData.assigneeIds) {
       await connection.execute(
-        'INSERT INTO TaskAssignees (TaskId, AssigneeId) VALUES (?, ?)',
+        'INSERT INTO TaskAssignees (TaskId, AssigneeId, GroupId) VALUES (?, ?, NULL)',
         [taskId, assigneeId]
       );
     }
@@ -592,7 +606,7 @@ async function assignTaskToUsers(connection: any, taskId: number, assignData: As
   if (assignData.groupIds && assignData.groupIds.length > 0) {
     for (const groupId of assignData.groupIds) {
       await connection.execute(
-        'INSERT INTO TaskAssignees (TaskId, GroupId) VALUES (?, ?)',
+        'INSERT INTO TaskAssignees (TaskId, AssigneeId, GroupId) VALUES (?, NULL, ?)',
         [taskId, groupId]
       );
     }
@@ -746,7 +760,16 @@ async function escalateTaskByRule(taskId: number, rule: any): Promise<void> {
 // ============================================================================
 
 export async function getOverdueTasks(): Promise<TaskResponse[]> {
-  const [rows] = await pool.query<RowDataPacket[]>(SQL_QUERIES.GET_OVERDUE_TASKS, [TASK_STATUS.COMPLETED]);
+  const { DUE_TIME_INTERVAL_VALUE, DUE_TIME_INTERVAL_UNIT } = await import('./task.constants');
+  
+  // Get tasks that are overdue or due within the configured interval
+  const [rows] = await pool.query<RowDataPacket[]>(
+    `SELECT * FROM Tasks 
+     WHERE IsDeleted = FALSE 
+     AND StatusId != ? 
+     AND CONCAT(DueDate, ' ', DueTime) <= DATE_ADD(UTC_TIMESTAMP(), INTERVAL ? ${DUE_TIME_INTERVAL_UNIT})`,
+    [TASK_STATUS.COMPLETED, DUE_TIME_INTERVAL_VALUE]
+  );
   
   const tasks = await Promise.all(rows.map(async (task) => {
     return await enhanceTaskWithDetails(task as any);
@@ -760,6 +783,37 @@ export async function getOverdueTasks(): Promise<TaskResponse[]> {
       timestamp: new Date()
     });
   }
+
+  console.log(`📋 getOverdueTasks: Found ${tasks.length} task(s) overdue or due within ${DUE_TIME_INTERVAL_VALUE} ${DUE_TIME_INTERVAL_UNIT}(s)`);
+
+  return tasks;
+}
+
+export async function getDueTasks(): Promise<TaskResponse[]> {
+  // Get tasks that are due within the configured time window
+  // Since times are stored in UTC, we need to compare with UTC time
+  const { SCHEDULER_CONFIG } = await import('./task.constants');
+  
+  const windowValue = SCHEDULER_CONFIG.DUE_TASKS_WINDOW_VALUE;
+  const windowUnit = SCHEDULER_CONFIG.DUE_TASKS_WINDOW_UNIT;
+  const bufferValue = SCHEDULER_CONFIG.DUE_TASKS_BUFFER_VALUE;
+  const bufferUnit = SCHEDULER_CONFIG.DUE_TASKS_BUFFER_UNIT;
+  
+  const [rows] = await pool.query<RowDataPacket[]>(
+    `SELECT * FROM Tasks 
+     WHERE IsDeleted = FALSE 
+     AND StatusId != ? 
+     AND CONCAT(DueDate, ' ', DueTime) BETWEEN 
+         DATE_SUB(UTC_TIMESTAMP(), INTERVAL ? ${bufferUnit}) 
+         AND DATE_ADD(UTC_TIMESTAMP(), INTERVAL ? ${windowUnit})`,
+    [TASK_STATUS.COMPLETED, bufferValue, windowValue]
+  );
+  
+  const tasks = await Promise.all(rows.map(async (task) => {
+    return await enhanceTaskWithDetails(task as any);
+  }));
+
+  console.log(`📋 getDueTasks: Found ${tasks.length} task(s) due within ${windowValue} ${windowUnit}(s) (with ${bufferValue} ${bufferUnit} buffer)`);
 
   return tasks;
 }

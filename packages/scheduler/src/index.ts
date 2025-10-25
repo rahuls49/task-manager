@@ -1,85 +1,60 @@
 import cron from 'node-cron';
 import { addTaskToQueue } from "../../queue-lib/src/queue";
+import 'dotenv/config'
 
-//
-// Mock API call - replace with actual API call
-async function fetchOverdueTasks() {
-  // Example actual data structure
-  return {
-    success: true,
-    message: "Overdue tasks fetched successfully",
-    data: [
-      {
-        Id: 9,
-        ParentTaskId: null,
-        Title: "Send Whatsapp to yogesh daga",
-        Description: "Write comprehensive documentation for the task management system",
-        DueDate: "2025-10-24T18:30:00.000Z", // Updated to today's date
-        DueTime: "19:13:00", // Future time
-        IsRecurring: 0,
-        RecurrenceId: null,
-        StatusId: 1,
-        PriorityId: 2,
-        IsEscalated: 0,
-        EscalationLevel: 0,
-        EscalatedAt: null,
-        EscalatedBy: null,
-        IsDeleted: 0,
-        DeletedAt: null,
-        CreatedAt: "2025-10-24T12:11:25.000Z",
-        UpdatedAt: "2025-10-24T12:11:25.000Z",
-        assignees: [],
-        groups: [],
-        subtasks: []
-      },
-      {
-        Id: 10,
-        ParentTaskId: null,
-        Title: "Send Whatsapp to Rahul Sahu",
-        Description: "Write comprehensive documentation for the task management system",
-        DueDate: "2025-10-24T18:30:00.000Z", // Updated to today's date
-        DueTime: "19:14:00", // Future time
-        IsRecurring: 0,
-        RecurrenceId: null,
-        StatusId: 1,
-        PriorityId: 2,
-        IsEscalated: 0,
-        EscalationLevel: 0,
-        EscalatedAt: null,
-        EscalatedBy: null,
-        IsDeleted: 0,
-        DeletedAt: null,
-        CreatedAt: "2025-10-24T12:12:02.000Z",
-        UpdatedAt: "2025-10-24T12:12:02.000Z",
-        assignees: [],
-        groups: [],
-        subtasks: []
-      }
-    ]
-  };
+// Configurable scheduler settings
+const SCHEDULER_CRON = process.env.SCHEDULER_CRON || '*/2 * * * *';
+const MAX_SCHEDULING_DELAY_MS = parseInt(process.env.MAX_SCHEDULING_DELAY_MS || '1800000'); // 30 minutes default
+
+interface dueTasksResponse {
+  success: boolean;
+  message: string;
+  data?: any[];
+}
+
+async function fetchDueTasks(): Promise<dueTasksResponse> {
+  const res = await fetch(`${process.env.BACKEND_API_BASE_URL}/system/tasks/due`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json'
+    }
+  }).then(res => res.json());
+  console.log("Result from scheduler api call: ", res)
+  return res as dueTasksResponse;
 }
 
 const scheduledTasks = new Set<number>();
 
-cron.schedule('*/2 * * * *', async () => {
-  console.log("⏰ Running hourly cron at", new Date().toLocaleString());
+cron.schedule(SCHEDULER_CRON, async () => {
+  console.log("⏰ Running scheduler at", new Date().toLocaleString());
 
-  const res = await fetchOverdueTasks();
-  if (res.success && res.data.length > 0) {
+  const res = await fetchDueTasks();
+  if (res.success && res.data && res.data.length > 0) {
+    console.log(`📋 Found ${res.data.length} due task(s)`);
+    
     for (const task of res.data) {
       if (!scheduledTasks.has(task.Id)) {
-        // Check if due time is in the future
+        // Get the due timestamp
         const dueTs = getDueTimestamp(task);
-        const delay = dueTs ? Math.max(dueTs - Date.now(), 0) : 0;
-        console.log({delay})
-        if (delay > 0) {
+        const now = Date.now();
+        const delay = dueTs ? Math.max(dueTs - now, 0) : 0;
+        
+        console.log(`🔍 Task ${task.Id} "${task.Title}": Due at ${dueTs ? new Date(dueTs).toLocaleString() : 'unknown'}, Current time: ${new Date(now).toLocaleString()}, Delay: ${Math.round(delay / 1000)}s`);
+        
+        // Only add to queue if task is due within the configured max delay
+        if (delay <= MAX_SCHEDULING_DELAY_MS) {
           await addTaskToQueue(task);
           scheduledTasks.add(task.Id);
+          console.log(`✅ Task ${task.Id} added to queue with ${Math.round(delay/1000)}s delay`);
+        } else {
+          console.log(`⏳ Task ${task.Id} not yet due (${Math.round(delay/1000)}s remaining, max: ${Math.round(MAX_SCHEDULING_DELAY_MS/1000)}s), skipping`);
         }
+      } else {
+        console.log(`🔄 Task ${task.Id} already scheduled, skipping`);
       }
     }
   } else {
-    console.log("No due tasks found this hour.");
+    console.log("📭 No due tasks found.");
   }
 });
 
@@ -87,16 +62,34 @@ function getDueTimestamp(task: any): number | undefined {
   // Try combined first to use DueDate date + DueTime time
   if (task?.DueDate && task?.DueTime) {
     try {
-      const combined = new Date(`${task.DueDate.split('T')[0]}T${task.DueTime}`);
-      if (!Number.isNaN(combined.getTime())) return combined.getTime();
-    } catch (e) {}
+      // Extract just the date part (YYYY-MM-DD)
+      const dateStr = task.DueDate.split('T')[0];
+      // Ensure DueTime is in HH:MM:SS format
+      let timeStr = task.DueTime;
+      if (timeStr.length === 5) { // HH:MM format
+        timeStr = timeStr + ':00'; // Convert to HH:MM:SS
+      }
+      
+      // Combine date and time into a proper UTC ISO string
+      const combinedStr = `${dateStr}T${timeStr}Z`; // Adding Z to indicate UTC
+      const combined = new Date(combinedStr);
+      
+      if (!Number.isNaN(combined.getTime())) {
+        console.log(`📅 Parsed due time (UTC): ${combinedStr} -> ${combined.toLocaleString()} (${combined.toISOString()})`);
+        return combined.getTime();
+      }
+    } catch (e) {
+      console.error('Error parsing date/time:', e);
+    }
   }
+  
   // Then check for dueTime as number or string
   if (typeof task?.dueTime === 'number' && Number.isFinite(task.dueTime)) return task.dueTime;
   if (typeof task?.dueTime === 'string') {
     const n = Number(task.dueTime);
     if (!Number.isNaN(n) && Number.isFinite(n)) return n;
   }
+  
   // Then ISO date string
   const iso = task?.DueDate ?? task?.dueDate ?? task?.due_time ?? task?.dueDate;
   if (typeof iso === 'string') {
@@ -106,4 +99,6 @@ function getDueTimestamp(task: any): number | undefined {
   return undefined;
 }
 
-console.log("🧠 Scheduler started. Waiting for next hourly run...");
+console.log(`🧠 Scheduler started with cron schedule: ${SCHEDULER_CRON}`);
+console.log(`📋 Max scheduling delay: ${Math.round(MAX_SCHEDULING_DELAY_MS/1000/60)} minutes`);
+console.log("⏰ Waiting for next scheduled run...");

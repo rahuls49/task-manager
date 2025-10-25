@@ -15,8 +15,6 @@ import {
   processEscalations,
   getSubtasks,
   createSubtask,
-  getOverdueTasks,
-  getTaskStats,
   duplicateTask,
   listTasks
 } from "./task.controller";
@@ -102,15 +100,6 @@ taskRouter.get('/:id/subtasks', getSubtasks);
 // Create subtask under a parent task
 taskRouter.post('/:id/subtasks', createSubtask);
 
-// ============================================================================
-// UTILITY OPERATIONS
-// ============================================================================
-
-// Get overdue tasks
-taskRouter.get('/system/overdue', getOverdueTasks);
-
-// Get task statistics
-taskRouter.get('/system/stats', getTaskStats);
 
 // Duplicate task
 taskRouter.post('/:id/duplicate', duplicateTask);

@@ -38,10 +38,16 @@ export async function listTasks(req: Request, res: Response, next: NextFunction)
     const limit = parseInt(req.body.limit as string) || 50;
     
     // Build filters from request body
-    const filters: TaskFilters = req.body.filters || {};
-
+    const allowedFilters = ['status', 'priority', 'assigneeId', 'groupId', 'overdue', 'completed', 'parentTaskId', 'isSubTask'];
+    const filters: TaskFilters = {};
+    for (const key of allowedFilters) {
+      if (req.body.hasOwnProperty(key)) {
+        (filters as any)[key] = req.body[key];
+      }
+    }
+    console.log({filters})
     const result = await taskService.getTasksWithFilters(filters, page, limit);
-    
+
     return res.json({
       success: true,
       message: "Tasks fetched successfully",
@@ -84,6 +90,14 @@ export async function createTask(req: Request, res: Response, next: NextFunction
   try {
     const taskData: CreateTaskDto = req.body;
     const userId = req.user?.id ? parseInt(req.user.id as string) : undefined;
+
+    // Normalize assigneeIds and groupIds to arrays
+    if (taskData.assigneeIds !== undefined && !Array.isArray(taskData.assigneeIds)) {
+      taskData.assigneeIds = [taskData.assigneeIds];
+    }
+    if (taskData.groupIds !== undefined && !Array.isArray(taskData.groupIds)) {
+      taskData.groupIds = [taskData.groupIds];
+    }
 
     const taskId = await taskService.createTask(taskData, userId);
     const createdTask = await taskService.getTaskById(taskId);
@@ -372,6 +386,20 @@ export async function getOverdueTasks(req: Request, res: Response, next: NextFun
   }
 }
 
+export async function getDueTasks(req: Request, res: Response, next: NextFunction) {
+  try {
+    const tasks = await taskService.getDueTasks();
+    
+    return res.json({
+      success: true,
+      message: "Due tasks fetched successfully",
+      data: tasks
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function getTaskStats(req: Request, res: Response, next: NextFunction) {
   try {
     const stats = await taskService.getTaskStats();
@@ -380,6 +408,87 @@ export async function getTaskStats(req: Request, res: Response, next: NextFuncti
       success: true,
       message: "Task statistics fetched successfully",
       data: stats
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getSchedulerConfig(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { DUE_TIME_INTERVAL_VALUE, DUE_TIME_INTERVAL_UNIT, SCHEDULER_CONFIG } = await import('./task.constants');
+    
+    const config = {
+      dueTimeInterval: {
+        value: DUE_TIME_INTERVAL_VALUE,
+        unit: DUE_TIME_INTERVAL_UNIT
+      },
+      schedulerConfig: SCHEDULER_CONFIG,
+      description: {
+        dueTimeInterval: "Configuration for getOverdueTasks - how far in advance to look for tasks",
+        schedulerConfig: "Configuration for the scheduler service - timing windows and cron schedule"
+      }
+    };
+    
+    return res.json({
+      success: true,
+      message: "Scheduler configuration fetched successfully",
+      data: config
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function updateSchedulerConfig(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { 
+      dueTimeIntervalValue, 
+      dueTimeIntervalUnit,
+      dueTasksWindowValue,
+      dueTasksWindowUnit,
+      dueTasksBufferValue,
+      dueTasksBufferUnit,
+      maxSchedulingDelayMs
+    } = req.body;
+    
+    // Update environment variables (note: requires server restart to fully take effect)
+    if (dueTimeIntervalValue !== undefined) {
+      process.env.DUE_TIME_INTERVAL_VALUE = dueTimeIntervalValue.toString();
+    }
+    if (dueTimeIntervalUnit !== undefined) {
+      process.env.DUE_TIME_INTERVAL_UNIT = dueTimeIntervalUnit;
+    }
+    if (dueTasksWindowValue !== undefined) {
+      process.env.DUE_TASKS_WINDOW_VALUE = dueTasksWindowValue.toString();
+    }
+    if (dueTasksWindowUnit !== undefined) {
+      process.env.DUE_TASKS_WINDOW_UNIT = dueTasksWindowUnit;
+    }
+    if (dueTasksBufferValue !== undefined) {
+      process.env.DUE_TASKS_BUFFER_VALUE = dueTasksBufferValue.toString();
+    }
+    if (dueTasksBufferUnit !== undefined) {
+      process.env.DUE_TASKS_BUFFER_UNIT = dueTasksBufferUnit;
+    }
+    if (maxSchedulingDelayMs !== undefined) {
+      process.env.MAX_SCHEDULING_DELAY_MS = maxSchedulingDelayMs.toString();
+    }
+    
+    return res.json({
+      success: true,
+      message: "Scheduler configuration updated successfully. Restart services to apply changes.",
+      data: {
+        updated: {
+          dueTimeIntervalValue: process.env.DUE_TIME_INTERVAL_VALUE,
+          dueTimeIntervalUnit: process.env.DUE_TIME_INTERVAL_UNIT,
+          dueTasksWindowValue: process.env.DUE_TASKS_WINDOW_VALUE,
+          dueTasksWindowUnit: process.env.DUE_TASKS_WINDOW_UNIT,
+          dueTasksBufferValue: process.env.DUE_TASKS_BUFFER_VALUE,
+          dueTasksBufferUnit: process.env.DUE_TASKS_BUFFER_UNIT,
+          maxSchedulingDelayMs: process.env.MAX_SCHEDULING_DELAY_MS
+        }
+      }
     });
   } catch (error) {
     next(error);
@@ -403,7 +512,7 @@ export async function duplicateTask(req: Request, res: Response, next: NextFunct
     const duplicateData: CreateTaskDto = {
       title: `${originalTask.Title} (Copy)`,
       description: originalTask.Description,
-      dueDate: originalTask.DueDate,
+      dueDate: (originalTask.DueDate as any).toISOString().split('T')[0],
       dueTime: originalTask.DueTime,
       statusId: 1, // Reset to TODO
       priorityId: originalTask.PriorityId,
