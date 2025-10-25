@@ -13,51 +13,34 @@ export async function getTasks(req: Request, res: Response, next: NextFunction) 
   try {
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 50;
-    
-    // Build filters from query parameters
-    const filters: TaskFilters = {};
-    
-    if (req.query.status) {
-      filters.status = Array.isArray(req.query.status) 
-        ? req.query.status.map(s => parseInt(s as string))
-        : [parseInt(req.query.status as string)];
-    }
-    
-    if (req.query.priority) {
-      filters.priority = Array.isArray(req.query.priority)
-        ? req.query.priority.map(p => parseInt(p as string))
-        : [parseInt(req.query.priority as string)];
-    }
-    
-    if (req.query.assigneeId) {
-      filters.assigneeId = parseInt(req.query.assigneeId as string);
-    }
-    
-    if (req.query.groupId) {
-      filters.groupId = parseInt(req.query.groupId as string);
-    }
-    
-    if (req.query.overdue) {
-      filters.overdue = req.query.overdue === 'true';
-    }
-    
-    if (req.query.completed !== undefined) {
-      filters.completed = req.query.completed === 'true';
-    }
-    
-    if (req.query.parentTaskId !== undefined) {
-      if (req.query.parentTaskId === 'null') {
-        filters.parentTaskId = undefined;
-      } else {
-        filters.parentTaskId = parseInt(req.query.parentTaskId as string);
-      }
-    }
-    
-    if (req.query.isSubTask !== undefined) {
-      filters.isSubTask = req.query.isSubTask === 'true';
-    }
 
-    const result = await taskService.getTasks(filters, page, limit);
+    const result = await taskService.getTasks(page, limit);
+    
+    return res.json({
+      success: true,
+      message: "Tasks fetched successfully",
+      data: result.tasks,
+      pagination: {
+        page,
+        limit,
+        total: result.total,
+        totalPages: Math.ceil(result.total / limit)
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function listTasks(req: Request, res: Response, next: NextFunction) {
+  try {
+    const page = parseInt(req.body.page as string) || 1;
+    const limit = parseInt(req.body.limit as string) || 50;
+    
+    // Build filters from request body
+    const filters: TaskFilters = req.body.filters || {};
+
+    const result = await taskService.getTasksWithFilters(filters, page, limit);
     
     return res.json({
       success: true,
@@ -325,7 +308,7 @@ export async function getSubtasks(req: Request, res: Response, next: NextFunctio
       parentTaskId: parentTaskId
     };
 
-    const result = await taskService.getTasks(filters, page, limit);
+    const result = await taskService.getTasksWithFilters(filters, page, limit);
 
     return res.json({
       success: true,

@@ -17,7 +17,8 @@ import {
   createSubtask,
   getOverdueTasks,
   getTaskStats,
-  duplicateTask
+  duplicateTask,
+  listTasks
 } from "./task.controller";
 
 const taskRouter = Router();
@@ -45,6 +46,9 @@ const upload = multer({
 
 // Get all tasks with filtering and pagination
 taskRouter.get('/', getTasks);
+
+// Get tasks with filters from request body
+taskRouter.post('/list', listTasks);
 
 // Get single task by ID
 taskRouter.get('/:id', getTaskById);

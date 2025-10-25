@@ -105,7 +105,7 @@ export async function validateTaskData(data: CreateTaskDto | UpdateTaskDto): Pro
 }
 
 async function checkTaskExists(taskId: number): Promise<boolean> {
-  const [rows] = await pool.execute<RowDataPacket[]>(
+  const [rows] = await pool.query<RowDataPacket[]>(
     'SELECT COUNT(*) as count FROM Tasks WHERE Id = ? AND IsDeleted = FALSE',
     [taskId]
   );
@@ -113,7 +113,7 @@ async function checkTaskExists(taskId: number): Promise<boolean> {
 }
 
 async function checkStatusExists(statusId: number): Promise<boolean> {
-  const [rows] = await pool.execute<RowDataPacket[]>(
+  const [rows] = await pool.query<RowDataPacket[]>(
     'SELECT COUNT(*) as count FROM TaskStatus WHERE Id = ?',
     [statusId]
   );
@@ -121,7 +121,7 @@ async function checkStatusExists(statusId: number): Promise<boolean> {
 }
 
 async function checkPriorityExists(priorityId: number): Promise<boolean> {
-  const [rows] = await pool.execute<RowDataPacket[]>(
+  const [rows] = await pool.query<RowDataPacket[]>(
     'SELECT COUNT(*) as count FROM TaskPriority WHERE Id = ?',
     [priorityId]
   );
@@ -129,7 +129,7 @@ async function checkPriorityExists(priorityId: number): Promise<boolean> {
 }
 
 async function checkCircularDependency(taskId: number, parentTaskId: number): Promise<boolean> {
-  const [rows] = await pool.execute<RowDataPacket[]>(
+  const [rows] = await pool.query<RowDataPacket[]>(
     'WITH RECURSIVE TaskHierarchy AS (SELECT Id, ParentTaskId FROM Tasks WHERE Id = ? UNION ALL SELECT t.Id, t.ParentTaskId FROM Tasks t INNER JOIN TaskHierarchy th ON t.ParentTaskId = th.Id) SELECT COUNT(*) as count FROM TaskHierarchy WHERE Id = ?',
     [parentTaskId, taskId]
   );
@@ -140,62 +140,80 @@ async function checkCircularDependency(taskId: number, parentTaskId: number): Pr
 // CORE TASK OPERATIONS
 // ============================================================================
 
-export async function getTasks(filters?: TaskFilters, page: number = 1, limit: number = 50): Promise<{ tasks: TaskResponse[], total: number }> {
+export async function getTasks(page: number = 1, limit: number = 50): Promise<{ tasks: TaskResponse[], total: number }> {
+  const query = `${SQL_QUERIES.GET_TASKS_WITH_DETAILS} ORDER BY t.CreatedAt DESC LIMIT ? OFFSET ?`;
+  const params: any[] = [limit, (page - 1) * limit];
+
+  // Get total count
+  const countQuery = `SELECT COUNT(*) as total FROM Tasks t WHERE t.IsDeleted = FALSE`;
+  const [countResult] = await pool.query<RowDataPacket[]>(countQuery);
+  const total = countResult[0].total;
+  
+  const [rows] = await pool.query<RowDataPacket[]>(query, params);
+
+  // Enhance tasks with assignees and subtasks
+  const tasks = await Promise.all(rows.map(async (task) => {
+    const enhancedTask = await enhanceTaskWithDetails(task as any);
+    return enhancedTask;
+  }));
+
+  return { tasks, total };
+}
+
+export async function getTasksWithFilters(filters: TaskFilters, page: number = 1, limit: number = 50): Promise<{ tasks: TaskResponse[], total: number }> {
   let query = SQL_QUERIES.GET_TASKS_WITH_DETAILS;
   const params: any[] = [];
   const conditions: string[] = [];
 
   // Apply filters
-  if (filters) {
-    if (filters.status && filters.status.length > 0) {
-      conditions.push(`t.StatusId IN (${filters.status.map(() => '?').join(', ')})`);
-      params.push(...filters.status);
-    }
+  if (filters.status && filters.status.length > 0) {
+    conditions.push(`t.StatusId IN (${filters.status.map(() => '?').join(', ')})`);
+    params.push(...filters.status);
+  }
 
-    if (filters.priority && filters.priority.length > 0) {
-      conditions.push(`t.PriorityId IN (${filters.priority.map(() => '?').join(', ')})`);
-      params.push(...filters.priority);
-    }
+  if (filters.priority && filters.priority.length > 0) {
+    conditions.push(`t.PriorityId IN (${filters.priority.map(() => '?').join(', ')})`);
+    params.push(...filters.priority);
+  }
 
-    if (filters.assigneeId) {
-      conditions.push(`EXISTS (SELECT 1 FROM TaskAssignees ta WHERE ta.TaskId = t.Id AND ta.AssigneeId = ?)`);
-      params.push(filters.assigneeId);
-    }
+  if (filters.assigneeId) {
+    conditions.push(`EXISTS (SELECT 1 FROM TaskAssignees ta WHERE ta.TaskId = t.Id AND ta.AssigneeId = ?)`);
+    params.push(filters.assigneeId);
+  }
 
-    if (filters.groupId) {
-      conditions.push(`EXISTS (SELECT 1 FROM TaskAssignees ta WHERE ta.TaskId = t.Id AND ta.GroupId = ?)`);
-      params.push(filters.groupId);
-    }
+  if (filters.groupId) {
+    conditions.push(`EXISTS (SELECT 1 FROM TaskAssignees ta WHERE ta.TaskId = t.Id AND ta.GroupId = ?)`);
+    params.push(filters.groupId);
+  }
 
-    if (filters.overdue) {
-      conditions.push(`((t.DueDate < CURDATE()) OR (t.DueDate = CURDATE() AND t.DueTime < CURTIME()))`);
-    }
+  if (filters.overdue) {
+    conditions.push(`((t.DueDate < CURDATE()) OR (t.DueDate = CURDATE() AND t.DueTime < CURTIME()))`);
+  }
 
-    if (filters.completed !== undefined) {
-      if (filters.completed) {
-        conditions.push(`t.StatusId = ?`);
-        params.push(TASK_STATUS.COMPLETED);
-      } else {
-        conditions.push(`t.StatusId != ?`);
-        params.push(TASK_STATUS.COMPLETED);
-      }
+  if (filters.completed !== undefined) {
+    if (filters.completed) {
+      conditions.push(`t.StatusId = ?`);
+      params.push(TASK_STATUS.COMPLETED);
+    } else {
+      conditions.push(`t.StatusId != ?`);
+      params.push(TASK_STATUS.COMPLETED);
     }
+  }
 
-    if (filters.parentTaskId !== undefined) {
-      if (filters.parentTaskId === null) {
-        conditions.push(`t.ParentTaskId IS NULL`);
-      } else {
-        conditions.push(`t.ParentTaskId = ?`);
-        params.push(filters.parentTaskId);
-      }
+  if (filters.parentTaskId !== undefined) {
+    if (filters.parentTaskId === null) {
+      conditions.push(`t.ParentTaskId IS NULL`);
+    } else {
+      conditions.push(`t.ParentTaskId = ?`);
+      params.push(filters.parentTaskId);
     }
+  }
 
-    if (filters.isSubTask !== undefined) {
-      if (filters.isSubTask) {
-        conditions.push(`t.ParentTaskId IS NOT NULL`);
-      } else {
-        conditions.push(`t.ParentTaskId IS NULL`);
-      }
+  if (filters.isSubTask !== undefined) {
+    if (filters.isSubTask) {
+      conditions.push(`t.ParentTaskId IS NOT NULL`);
+    } else {
+      conditions.push(`t.ParentTaskId IS NULL`);
     }
   }
 
@@ -205,15 +223,15 @@ export async function getTasks(filters?: TaskFilters, page: number = 1, limit: n
 
   // Get total count
   const countQuery = `SELECT COUNT(*) as total FROM Tasks t WHERE t.IsDeleted = FALSE ${conditions.length > 0 ? ' AND ' + conditions.join(' AND ') : ''}`;
-  const [countResult] = await pool.execute<RowDataPacket[]>(countQuery, params);
+  const [countResult] = await pool.query<RowDataPacket[]>(countQuery, params);
   const total = countResult[0].total;
   
   // Add pagination
   query += ` ORDER BY t.CreatedAt DESC LIMIT ? OFFSET ?`;
   params.push(limit, (page - 1) * limit);
-  console.log(params)
-  const [rows] = await pool.execute<RowDataPacket[]>(query, params);
-  console.log(rows)
+
+  const [rows] = await pool.query<RowDataPacket[]>(query, params);
+
   // Enhance tasks with assignees and subtasks
   const tasks = await Promise.all(rows.map(async (task) => {
     const enhancedTask = await enhanceTaskWithDetails(task as any);
@@ -225,7 +243,7 @@ export async function getTasks(filters?: TaskFilters, page: number = 1, limit: n
 
 export async function getTaskById(taskId: number): Promise<TaskResponse | null> {
   const query = `${SQL_QUERIES.GET_TASKS_WITH_DETAILS} AND t.Id = ?`;
-  const [rows] = await pool.execute<RowDataPacket[]>(query, [taskId]);
+  const [rows] = await pool.query<RowDataPacket[]>(query, [taskId]);
   
   if (rows.length === 0) {
     return null;
@@ -236,7 +254,7 @@ export async function getTaskById(taskId: number): Promise<TaskResponse | null> 
 
 async function enhanceTaskWithDetails(task: any): Promise<TaskResponse> {
   // Get assignees
-  const [assigneeRows] = await pool.execute<RowDataPacket[]>(SQL_QUERIES.GET_TASK_ASSIGNEES, [task.Id]);
+  const [assigneeRows] = await pool.query<RowDataPacket[]>(SQL_QUERIES.GET_TASK_ASSIGNEES, [task.Id]);
   
   const assignees = assigneeRows.filter(row => row.AssigneeId).map(row => ({
     Id: row.AssigneeId,
@@ -250,7 +268,7 @@ async function enhanceTaskWithDetails(task: any): Promise<TaskResponse> {
   }));
 
   // Get subtasks
-  const [subtaskRows] = await pool.execute<RowDataPacket[]>(
+  const [subtaskRows] = await pool.query<RowDataPacket[]>(
     `${SQL_QUERIES.GET_TASKS_WITH_DETAILS} AND t.ParentTaskId = ?`,
     [task.Id]
   );
@@ -403,7 +421,7 @@ export async function updateTask(taskId: number, data: UpdateTaskDto, userId?: n
 async function validateStatusTransition(taskId: number, currentStatusId: number, newStatusId: number): Promise<void> {
   // Cannot mark parent task as completed if subtasks are incomplete
   if (newStatusId === TASK_STATUS.COMPLETED) {
-    const [subtasks] = await pool.execute<RowDataPacket[]>(
+    const [subtasks] = await pool.query<RowDataPacket[]>(
       'SELECT COUNT(*) as count FROM Tasks WHERE ParentTaskId = ? AND StatusId != ? AND IsDeleted = FALSE',
       [taskId, TASK_STATUS.COMPLETED]
     );
@@ -502,7 +520,7 @@ export async function deleteTask(taskId: number, userId?: number): Promise<boole
   }
 
   // Soft delete - update IsDeleted flag
-  const [result] = await pool.execute<ResultSetHeader>(
+  const [result] = await pool.query<ResultSetHeader>(
     'UPDATE Tasks SET IsDeleted = TRUE, DeletedAt = NOW() WHERE Id = ?',
     [taskId]
   );
@@ -595,7 +613,7 @@ export async function unassignTask(taskId: number, assigneeId?: number, groupId?
     params.push(groupId);
   }
 
-  const [result] = await pool.execute<ResultSetHeader>(
+  const [result] = await pool.query<ResultSetHeader>(
     `DELETE FROM TaskAssignees WHERE ${conditions.join(' AND ')}`,
     params
   );
@@ -662,11 +680,11 @@ export async function escalateTask(taskId: number, userId?: number, notes?: stri
 }
 
 export async function checkAndProcessEscalations(): Promise<void> {
-  const [candidates] = await pool.execute<RowDataPacket[]>(SQL_QUERIES.GET_ESCALATION_CANDIDATES);
+  const [candidates] = await pool.query<RowDataPacket[]>(SQL_QUERIES.GET_ESCALATION_CANDIDATES);
 
   for (const task of candidates) {
     // Check escalation rules
-    const [rules] = await pool.execute<RowDataPacket[]>(
+    const [rules] = await pool.query<RowDataPacket[]>(
       'SELECT * FROM EscalationRules WHERE IsActive = TRUE'
     );
 
@@ -728,7 +746,7 @@ async function escalateTaskByRule(taskId: number, rule: any): Promise<void> {
 // ============================================================================
 
 export async function getOverdueTasks(): Promise<TaskResponse[]> {
-  const [rows] = await pool.execute<RowDataPacket[]>(SQL_QUERIES.GET_OVERDUE_TASKS, [TASK_STATUS.COMPLETED]);
+  const [rows] = await pool.query<RowDataPacket[]>(SQL_QUERIES.GET_OVERDUE_TASKS, [TASK_STATUS.COMPLETED]);
   
   const tasks = await Promise.all(rows.map(async (task) => {
     return await enhanceTaskWithDetails(task as any);
@@ -747,21 +765,21 @@ export async function getOverdueTasks(): Promise<TaskResponse[]> {
 }
 
 export async function getTaskStats(): Promise<TaskStats> {
-  const [totalRows] = await pool.execute<RowDataPacket[]>(
+  const [totalRows] = await pool.query<RowDataPacket[]>(
     'SELECT COUNT(*) as total FROM Tasks WHERE IsDeleted = FALSE'
   );
 
-  const [statusRows] = await pool.execute<RowDataPacket[]>(
+  const [statusRows] = await pool.query<RowDataPacket[]>(
     'SELECT ts.StatusName, COUNT(*) as count FROM Tasks t JOIN TaskStatus ts ON t.StatusId = ts.Id WHERE t.IsDeleted = FALSE GROUP BY t.StatusId, ts.StatusName'
   );
 
-  const [priorityRows] = await pool.execute<RowDataPacket[]>(
+  const [priorityRows] = await pool.query<RowDataPacket[]>(
     'SELECT tp.PriorityName, COUNT(*) as count FROM Tasks t JOIN TaskPriority tp ON t.PriorityId = tp.Id WHERE t.IsDeleted = FALSE GROUP BY t.PriorityId, tp.PriorityName'
   );
 
-  const [overdueRows] = await pool.execute<RowDataPacket[]>(SQL_QUERIES.GET_OVERDUE_TASKS, [TASK_STATUS.COMPLETED]);
+  const [overdueRows] = await pool.query<RowDataPacket[]>(SQL_QUERIES.GET_OVERDUE_TASKS, [TASK_STATUS.COMPLETED]);
 
-  const [escalatedRows] = await pool.execute<RowDataPacket[]>(
+  const [escalatedRows] = await pool.query<RowDataPacket[]>(
     'SELECT COUNT(*) as count FROM Tasks WHERE IsDeleted = FALSE AND IsEscalated = TRUE'
   );
 
@@ -790,7 +808,7 @@ async function logTaskEvent(eventData: TaskEventData): Promise<void> {
   // This would typically log to an events table or external system
   console.log('Task Event:', eventData);
   // You could implement actual logging here:
-  // await pool.execute('INSERT INTO TaskEvents (TaskId, Event, OldValue, NewValue, UserId, Timestamp, Metadata) VALUES (?, ?, ?, ?, ?, ?, ?)', 
+  // await pool.query('INSERT INTO TaskEvents (TaskId, Event, OldValue, NewValue, UserId, Timestamp, Metadata) VALUES (?, ?, ?, ?, ?, ?, ?)', 
   //   [eventData.taskId, eventData.event, eventData.oldValue, eventData.newValue, eventData.userId, eventData.timestamp, JSON.stringify(eventData.metadata)]);
 }
 
