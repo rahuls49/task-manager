@@ -31,9 +31,9 @@ module.exports = {
       env: {
         NODE_ENV: "production",
         NEXTAUTH_SECRET: "LzEJ2e/aiYcBEY2SRZ4CJAEbHIrJibx4HfD6aqtbNRI=",
-        NEXTAUTH_URL: "http://localhost:3000",
-        API_BASE_URL: "http://localhost:5000",
-        NEXT_PUBLIC_API_BASE_URL: "http://localhost:5000",
+        NEXTAUTH_URL: "http://172.27.60.2:3000",
+        API_BASE_URL: "http://172.27.60.2:5000",
+        NEXT_PUBLIC_API_BASE_URL: "http://172.27.60.2:5000",
         // Add frontend-specific env vars if any
       },
       instances: 1,
@@ -46,7 +46,7 @@ module.exports = {
       cwd: "",
       env: {
         NODE_ENV: "production",
-        BACKEND_API_BASE_URL: "http://localhost:5000",
+        BACKEND_API_BASE_URL: "http://172.27.60.2:5000",
         SCHEDULER_CRON: "*/2 * * * *",
         MAX_SCHEDULING_DELAY_MS: 120000,
         // Add scheduler env vars (e.g., from packages/scheduler)
