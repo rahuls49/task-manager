@@ -26,8 +26,8 @@ module.exports = {
     },
     {
       name: "task-manager-frontend",
-      script: "frontend/server.js", // Next.js production build output
-      cwd: "~/task-manager",
+      script: "frontend/node_modules/next/dist/bin/next", // Next.js production build output
+      cwd: "",
       env: {
         NODE_ENV: "production",
         NEXTAUTH_SECRET: "LzEJ2e/aiYcBEY2SRZ4CJAEbHIrJibx4HfD6aqtbNRI=",
