@@ -14,6 +14,7 @@ import {
 import { Task } from "./_types/task.types"
 import { formatDateTime } from "@/lib/convert-to-ist"
 import StatusSwitch from "./status-switch"
+import UploadFromCSV from "./upload-from-csv"
 export default async function Home() {
   const session = await auth()
   if (!session) {
@@ -25,17 +26,14 @@ export default async function Home() {
     }
   })
   return (
-    <div className="p-8 w-screen flex items-center justify-center">
-      {/* <h1 className="text-2xl font-bold mb-4">Welcome, {session.user?.name}!</h1>
-      <p className="mb-4">Your User ID: {session.user?.id}</p>
-      <p className="mb-4 max-w-full break-words">Your JWT Token: {session.user?.token}</p> */}
+    <div className="p-8 w-screen flex flex-col items-center justify-center">
+      <UploadFromCSV/>
       <Table>
         <TableCaption>Tasks Assigned to {session.user?.name}</TableCaption>
         <TableHeader>
           <TableRow>
             <TableHead>Sr. No.</TableHead>
             <TableHead>Title</TableHead>
-            {/* <TableHead>Description</TableHead> */}
             <TableHead>Due Date</TableHead>
             <TableHead>Status</TableHead>
           </TableRow>
