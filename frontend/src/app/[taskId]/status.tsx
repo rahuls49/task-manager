@@ -10,10 +10,10 @@ import axios from "axios";
 import { useSession } from "next-auth/react";
 import { useState } from "react";
 import toast from 'react-hot-toast';
-
-export default function StatusSection({ currentStatus, statuses, taskId }: { currentStatus: any, statuses: any, taskId: string }) {
+import { Status } from "../_types/task.types";
+export default function StatusSection({ currentStatus, statuses, taskId }: { currentStatus: Status, statuses: Status[], taskId: string }) {
     const { data: session } = useSession();
-    const [activeStatus, setActiveStatus] = useState(currentStatus);
+    const [activeStatus, setActiveStatus] = useState<Status>(currentStatus);
     console.log({ session })
     async function handleStatusChange(statusId: number) {
         if(statusId === activeStatus.Id) return;
@@ -25,7 +25,7 @@ export default function StatusSection({ currentStatus, statuses, taskId }: { cur
                     Authorization: `Bearer ${session?.user?.token}`
                 },
             })
-            setActiveStatus(task.data.data.status.StatusName)
+            setActiveStatus(task.data.data.status)
             // console.log({ task })
             toast.success('Status updated successfully')
         }
@@ -36,10 +36,10 @@ export default function StatusSection({ currentStatus, statuses, taskId }: { cur
     }
     return (
         <section className="flex gap-8 items-center mt-4">
-            <p>Current Status: {activeStatus.StatusName}</p>
+            <p>Please Click here to update the status:</p>
             <DropdownMenu modal={false}>
                 <DropdownMenuTrigger asChild>
-                    <button className="px-4 py-2 rounded-lg bg-slate-900 text-white">Update Status</button>
+                    <button className="px-4 py-2 rounded-lg bg-slate-900 text-white text-sm cursor-pointer">{activeStatus.StatusName}</button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent
                     align="end"
@@ -48,7 +48,7 @@ export default function StatusSection({ currentStatus, statuses, taskId }: { cur
                     style={{ zIndex: 9999 }}
                 >
                     {
-                        statuses.map((statusItem: any) => (
+                        statuses.map((statusItem: Status) => (
                             <DropdownMenuItem key={statusItem.Id} onClick={() => handleStatusChange(statusItem.Id)}>
                                 {statusItem.StatusName}
                             </DropdownMenuItem>
