@@ -42,11 +42,8 @@ export default async function Home() {
         </TableHeader>
         <TableBody>
           {
-            tasks?.data?.data.map((task: Task, index: number) => {
-              const datePart = task.DueDate.split('T')[0];
-              const dueDateTime = new Date(`${datePart}T${task.DueTime}Z`);
-              const now = new Date();
-              const isOverdue = dueDateTime < now;
+            tasks.data.data && tasks.data.data.map((task: Task, index: number) => {
+              const isOverdue = task.DueDate && task.DueTime ? new Date(`${task.DueDate.split('T')[0]}T${task.DueTime}Z`) < new Date() : false;
               return (
                 <TableRow key={task.Id} className={isOverdue ? "bg-red-200" : ""}>
                   <TableCell>{index}</TableCell>

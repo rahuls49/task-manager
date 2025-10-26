@@ -5,7 +5,7 @@ import { Task } from "../_types/task.types";
 export default function DueBanner({ task }: { task: Task }) {
     const [timeLeft, setTimeLeft] = useState<string>("");
 
-    const datePart = task.DueDate.split('T')[0];
+    const datePart = task.DueDate?.split('T')[0];
     const dueDateTime = new Date(`${datePart}T${task.DueTime}Z`);
 
     const formatTime = (ms: number) => {

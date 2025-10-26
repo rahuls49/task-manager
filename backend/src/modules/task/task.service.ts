@@ -872,10 +872,10 @@ export async function saveCSVData(csvData: CSVRow[]): Promise<void> {
     const taskData: CreateTaskDto = {
       title: row.title || row.name || 'Untitled Task',
       description: row.description,
-      dueDate: row.dueDate || row.due_date,
-      dueTime: row.dueTime || row.due_time,
-      statusId: parseInt(row.statusId || row.status_id) || TASK_STATUS.TODO,
-      priorityId: parseInt(row.priorityId || row.priority_id) || TASK_PRIORITY.MEDIUM
+      dueDate: row.duedate || row.dueDate || row.due_date,
+      dueTime: row.duetime || row.dueTime || row.due_time,
+      statusId: parseInt(row.statusid || row.statusId || row.status_id) || TASK_STATUS.TODO,
+      priorityId: parseInt(row.priorityid || row.priorityId || row.priority_id) || TASK_PRIORITY.MEDIUM
     };
 
     if (taskData.title) {
