@@ -222,7 +222,53 @@ Duplicate task.
 ### Data Operations
 
 #### POST /tasks/import/csv
-Import tasks from CSV file.
+Import tasks from CSV file with support for assignees and groups.
+
+**Content-Type:** `multipart/form-data`
+
+**Form Data:**
+- `file` (required): CSV file to upload
+
+**Supported CSV Columns:**
+- `title` or `name` (required): Task title
+- `description`: Task description
+- `dueDate`, `due_date`, or `duedate`: Due date (YYYY-MM-DD format)
+- `dueTime`, `due_time`, or `duetime`: Due time (HH:MM:SS format)
+- `statusId`, `status_id`, or `statusid`: Status ID (number)
+- `priorityId`, `priority_id`, or `priorityid`: Priority ID (number)
+- `assigneeIds`, `assignee_ids`, `assigneeId`, or `assignee_id`: Comma-separated assignee IDs (e.g., "1,2,3")
+- `groupIds`, `group_ids`, `groupId`, or `group_id`: Comma-separated group IDs (e.g., "1,2")
+
+**CSV Example:**
+```csv
+title,description,dueDate,dueTime,statusId,priorityId,assigneeIds,groupIds
+"Setup Database","Configure MySQL database",2024-12-31,14:30:00,1,2,"1,2",1
+"Code Review","Review pull request #123",2024-12-25,10:00:00,1,3,3,"1,2"
+"Deploy to Production","Deploy version 2.0",2024-12-30,16:00:00,1,4,"2,3",2
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "CSV file processed and saved to database successfully",
+  "data": {
+    "totalRecords": 3,
+    "processedRecords": 3,
+    "recordsWithAssignees": 3,
+    "recordsWithGroups": 3,
+    "processingErrors": null
+  }
+}
+```
+
+**Notes:**
+- Column names are case-insensitive and support multiple formats (camelCase, snake_case, etc.)
+- AssigneeIds and GroupIds support comma-separated values for multiple assignments
+- Invalid IDs will be filtered out during processing
+- Processing errors are returned in the response for debugging
+- File size limit: 5MB
+- Only CSV files are accepted
 
 ## Management API Endpoints
 

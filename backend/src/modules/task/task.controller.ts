@@ -549,6 +549,7 @@ export async function importFromCsv(req: Request, res: Response, next: NextFunct
     }
     
     const results: CSVRow[] = [];
+    const errors: string[] = [];
 
     // Convert buffer to stream and parse CSV
     const stream = Readable.from(req.file.buffer);
@@ -556,8 +557,12 @@ export async function importFromCsv(req: Request, res: Response, next: NextFunct
       stream
         .pipe(csv())
         .on('data', (data: CSVRow) => {
-          const processedData = processCSVRow(data);
-          results.push(processedData);
+          try {
+            const processedData = processCSVRow(data);
+            results.push(processedData);
+          } catch (error) {
+            errors.push(`Row processing error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          }
         })
         .on('end', async () => {
           try {
@@ -572,12 +577,19 @@ export async function importFromCsv(req: Request, res: Response, next: NextFunct
         });
     });
     
+    const validRecords = results.filter(r => r.title || r.name);
+    const recordsWithAssignees = results.filter(r => r.assigneeids || r.assigneeIds || r.assignee_ids || r.assigneeId || r.assignee_id);
+    const recordsWithGroups = results.filter(r => r.groupids || r.groupIds || r.group_ids || r.groupId || r.group_id);
+
     return res.json({
       success: true,
       message: 'CSV file processed and saved to database successfully',
       data: {
         totalRecords: results.length,
-        processedRecords: results.filter(r => r.title || r.name).length
+        processedRecords: validRecords.length,
+        recordsWithAssignees: recordsWithAssignees.length,
+        recordsWithGroups: recordsWithGroups.length,
+        processingErrors: errors.length > 0 ? errors : undefined
       }
     });
   } catch (error) {
@@ -593,6 +605,32 @@ function processCSVRow(row: CSVRow): CSVRow {
     const cleanKey = key.trim().toLowerCase().replace(/ /g, '_');
     const cleanValue = value ? value.trim() : '';
     processedRow[cleanKey] = cleanValue;
+  }
+  
+  // Validate assigneeIds if present
+  const assigneeIdsKey = Object.keys(processedRow).find(key => 
+    ['assigneeids', 'assignee_ids', 'assigneeid', 'assignee_id'].includes(key)
+  );
+  if (assigneeIdsKey && processedRow[assigneeIdsKey]) {
+    const assigneeIds = processedRow[assigneeIdsKey].split(',').map(id => id.trim());
+    // Validate that all IDs are numeric
+    const invalidIds = assigneeIds.filter(id => isNaN(parseInt(id)));
+    if (invalidIds.length > 0) {
+      throw new Error(`Invalid assignee IDs: ${invalidIds.join(', ')}`);
+    }
+  }
+  
+  // Validate groupIds if present
+  const groupIdsKey = Object.keys(processedRow).find(key => 
+    ['groupids', 'group_ids', 'groupid', 'group_id'].includes(key)
+  );
+  if (groupIdsKey && processedRow[groupIdsKey]) {
+    const groupIds = processedRow[groupIdsKey].split(',').map(id => id.trim());
+    // Validate that all IDs are numeric
+    const invalidIds = groupIds.filter(id => isNaN(parseInt(id)));
+    if (invalidIds.length > 0) {
+      throw new Error(`Invalid group IDs: ${invalidIds.join(', ')}`);
+    }
   }
   
   return processedRow;

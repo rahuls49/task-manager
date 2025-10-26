@@ -878,6 +878,26 @@ export async function saveCSVData(csvData: CSVRow[]): Promise<void> {
       priorityId: parseInt(row.priorityid || row.priorityId || row.priority_id) || TASK_PRIORITY.MEDIUM
     };
 
+    // Handle assigneeIds from CSV
+    const assigneeIdsStr = row.assigneeids || row.assigneeIds || row.assignee_ids || row.assigneeId || row.assignee_id;
+    if (assigneeIdsStr) {
+      // Handle comma-separated values or single value
+      const assigneeIds = assigneeIdsStr.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id));
+      if (assigneeIds.length > 0) {
+        taskData.assigneeIds = assigneeIds;
+      }
+    }
+
+    // Handle groupIds from CSV
+    const groupIdsStr = row.groupids || row.groupIds || row.group_ids || row.groupId || row.group_id;
+    if (groupIdsStr) {
+      // Handle comma-separated values or single value
+      const groupIds = groupIdsStr.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id));
+      if (groupIds.length > 0) {
+        taskData.groupIds = groupIds;
+      }
+    }
+
     if (taskData.title) {
       await createTask(taskData);
     }
