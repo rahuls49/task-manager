@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import toast from "react-hot-toast"
 
 export default function SignIn() {
     const [userId, setUserId] = useState("")
@@ -24,8 +25,10 @@ export default function SignIn() {
         })
 
         if (result?.error) {
+            toast.error("Invalid Userid or Password")
             setError("Invalid credentials")
         } else {
+            toast.success("Signed in successfully")
             router.push("/")
         }
     }

@@ -1,5 +1,6 @@
 import 'dotenv/config'
 import express from 'express';
+import cors from 'cors';
 import globalErrorHandler from './middlewares/global-error-handler';
 import taskRouter from './modules/task/task.route';
 import authRouter from './modules/auth/auth.route';
@@ -13,6 +14,7 @@ const port:number = parseInt(process.env.PORT as string || "5000");
 // Middlewares
 app.use(express.json());
 app.use(globalErrorHandler);
+app.use(cors());
 
 app.use('/tasks', verifyAuthToken, taskRouter);
 app.use('/system', taskSystemRouter);

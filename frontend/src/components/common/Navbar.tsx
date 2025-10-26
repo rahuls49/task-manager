@@ -16,7 +16,7 @@ import { useSession } from "next-auth/react";
 
 export default function Navbar() {
     const { data: session, status } = useSession();
-    
+
     // Don't render anything while loading
     if (status === "loading") return null;
     return (
@@ -28,8 +28,9 @@ export default function Navbar() {
                         className="flex items-center gap-2 px-3 py-2 h-auto hover:bg-gray-50 focus:outline-none focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0"
                     >
                         <Avatar className="h-8 w-8">
+                            <AvatarImage src="https://github.com/shadcn.png" alt="@shadcn" />
                             <AvatarFallback className="text-sm">
-                                {session?.user?.email}
+                                {session?.user?.name}
                             </AvatarFallback>
                         </Avatar>
                         <span className="hidden sm:block text-sm font-medium">
@@ -44,17 +45,8 @@ export default function Navbar() {
                     sideOffset={5}
                     style={{ zIndex: 9999 }}
                 >
-                    <div className="flex items-center gap-2 p-2">
-                        <Avatar className="h-8 w-8">
-                            <AvatarFallback className="text-sm">
-                                {session?.user?.email}
-                            </AvatarFallback>
-                        </Avatar>
-                        <div className="flex flex-col">
-                            <p className="text-sm font-medium">
-                                {session?.user?.name}
-                            </p>
-                        </div>
+                    <div className="p-2 text-sm font-medium text-center">
+                            {session?.user?.email}
                     </div>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem asChild>

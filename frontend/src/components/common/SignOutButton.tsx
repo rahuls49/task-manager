@@ -7,7 +7,7 @@ export default function SignOutButton() {
   return (
     <DropdownMenuItem
       onClick={() => signOut()}
-      className="flex items-center gap-2 cursor-pointer bg-red-600 focus:bg-red-600 text-white text-center"
+      className="cursor-pointer bg-red-600 focus:bg-red-600 text-white focus:text-white text-center!"
     >
       Sign Out
     </DropdownMenuItem>
