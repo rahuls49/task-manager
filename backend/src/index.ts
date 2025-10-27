@@ -9,12 +9,14 @@ import managementRouter from './modules/task/task.management.route';
 import taskSystemRouter from './modules/task/task.system.route';
 
 const app = express();
-const port:number = parseInt(process.env.PORT as string || "5000");
+const port: number = parseInt(process.env.PORT as string || "5000");
 
 // Middlewares
 app.use(express.json());
 app.use(globalErrorHandler);
-app.use(cors());
+app.use(cors(
+  { origin: true, credentials: true }
+));
 
 app.use('/tasks', verifyAuthToken, taskRouter);
 app.use('/system', taskSystemRouter);
