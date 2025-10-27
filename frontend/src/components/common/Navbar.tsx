@@ -21,7 +21,7 @@ export default function Navbar() {
     if (status === "loading") return null;
     return (
         session ? <nav className="bg-slate-50 flex justify-between items-center px-10">
-            <h2 className="font-bold">Task Manager</h2>
+            <Link href="/" className="font-bold">Task Manager</Link>
             <DropdownMenu modal={false}>
                 <DropdownMenuTrigger asChild>
                     <Button
