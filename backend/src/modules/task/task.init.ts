@@ -192,10 +192,10 @@ export async function getGroups(): Promise<any[]> {
 /**
  * Create a new assignee
  */
-export async function createAssignee(name: string, email: string): Promise<number> {
+export async function createAssignee(name: string, email: string, phone: string): Promise<number> {
   const [result] = await pool.execute<ResultSetHeader>(
-    'INSERT INTO Assignees (Name, Email) VALUES (?, ?)',
-    [name, email]
+    'INSERT INTO Assignees (Name, Email, Phone) VALUES (?, ?, ?)',
+    [name, email, phone]
   );
   return result.insertId;
 }

@@ -132,16 +132,16 @@ export async function getAssignees(req: Request, res: Response, next: NextFuncti
 
 export async function createAssignee(req: Request, res: Response, next: NextFunction) {
   try {
-    const { name, email } = req.body;
+    const { name, email, phone } = req.body;
     
-    if (!name || !email) {
+    if (!name || !email || !phone) {
       return res.status(400).json({
         success: false,
-        message: "Name and email are required"
+        message: "Name, email and phone are required"
       });
     }
     
-    const assigneeId = await taskInit.createAssignee(name, email);
+    const assigneeId = await taskInit.createAssignee(name, email, phone);
     
     return res.status(201).json({
       success: true,
