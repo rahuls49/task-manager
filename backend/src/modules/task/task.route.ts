@@ -16,7 +16,11 @@ import {
   getSubtasks,
   createSubtask,
   duplicateTask,
-  listTasks
+  listTasks,
+  createRecurrence,
+  getRecurrence,
+  updateRecurrence,
+  deleteRecurrence
 } from "./task.controller";
 
 const taskRouter = Router();
@@ -110,5 +114,21 @@ taskRouter.post('/:id/duplicate', duplicateTask);
 
 // Import tasks from CSV
 taskRouter.post('/import/csv', upload.single('file'), importFromCsv);
+
+// ============================================================================
+// RECURRENCE MANAGEMENT OPERATIONS  
+// ============================================================================
+
+// Create recurrence rule
+taskRouter.post('/recurrence', createRecurrence);
+
+// Get recurrence rule by ID
+taskRouter.get('/recurrence/:id', getRecurrence);
+
+// Update recurrence rule
+taskRouter.put('/recurrence/:id', updateRecurrence);
+
+// Delete recurrence rule
+taskRouter.delete('/recurrence/:id', deleteRecurrence);
 
 export default taskRouter;

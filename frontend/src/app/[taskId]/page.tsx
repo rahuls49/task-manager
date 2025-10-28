@@ -5,7 +5,7 @@ import StatusSection from "./status"
 import { Status, Task } from "../_types/task.types"
 import { formatDateTime } from "@/lib/convert-to-ist"
 import DueBanner from "./due-banner"
-
+import Link from "next/link"
 export default async function TaskPage({
     params,
 }: {
@@ -37,6 +37,7 @@ export default async function TaskPage({
 
     return (
         <div className="p-8 w-screen ">
+            <Link href="/">Back</Link>
             <DueBanner task={task.data.data}/>
             <h1 className="text-2xl font-bold">{task.data.data.Title}</h1>
             <p className="text-sm">{task.data.data.Description}</p>

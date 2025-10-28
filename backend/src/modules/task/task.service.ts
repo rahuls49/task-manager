@@ -21,6 +21,7 @@ import {
   TaskStats
 } from "./task.types";
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
+import * as recurrenceService from "./recurrence.service";
 
 // ============================================================================
 // VALIDATION FUNCTIONS
@@ -94,6 +95,20 @@ export async function validateTaskData(data: CreateTaskDto | UpdateTaskDto): Pro
         field: 'priorityId',
         message: ERROR_MESSAGES.INVALID_PRIORITY,
         code: 'INVALID_PRIORITY'
+      });
+    }
+  }
+
+  // Recurrence validation
+  if (data.recurrence) {
+    const recurrenceValidation = recurrenceService.validateRecurrenceData(data.recurrence);
+    if (!recurrenceValidation.isValid) {
+      recurrenceValidation.errors.forEach(error => {
+        errors.push({
+          field: 'recurrence',
+          message: error,
+          code: 'INVALID_RECURRENCE'
+        });
       });
     }
   }
@@ -277,6 +292,18 @@ async function enhanceTaskWithDetails(task: any): Promise<TaskResponse> {
     return await enhanceTaskWithDetails(subtask as any);
   }));
 
+  // Get recurrence details if task is recurring
+  let recurrence = undefined;
+  
+  if (task.IsRecurring && task.RecurrenceId) {
+    try {
+      // Get new recurrence structure
+      recurrence = await recurrenceService.getRecurrenceById(task.RecurrenceId);
+    } catch (error) {
+      console.error('Error fetching recurrence details:', error);
+    }
+  }
+
   return {
     ...task,
     assignees,
@@ -284,12 +311,7 @@ async function enhanceTaskWithDetails(task: any): Promise<TaskResponse> {
     subtasks,
     status: task.StatusName ? { Id: task.StatusId, StatusName: task.StatusName } : undefined,
     priority: task.PriorityName ? { Id: task.PriorityId, PriorityName: task.PriorityName } : undefined,
-    recurrence: task.RecurrenceFrequency ? {
-      Id: task.RecurrenceId,
-      Frequency: task.RecurrenceFrequency,
-      RecurrenceInterval: task.RecurrenceInterval,
-      EndDate: task.RecurrenceEndDate
-    } : undefined
+    recurrence
   };
 }
 
@@ -335,13 +357,23 @@ export async function createTask(data: CreateTaskDto, userId?: number): Promise<
   try {
     await connection.beginTransaction();
 
+    let recurrenceId: number | undefined;
+
+    // Create recurrence rule if specified
+    if (data.recurrence) {
+      recurrenceId = await recurrenceService.createRecurrenceRule(data.recurrence);
+      data.isRecurring = true;
+      data.recurrenceId = recurrenceId;
+    }
+
     // Insert task
     const taskFields = [];
     const taskValues = [];
     const taskPlaceholders = [];
 
     for (const [key, value] of Object.entries(data)) {
-      if (EDITABLE_TASK_FIELDS.includes(key) && value !== undefined) {
+      // Skip the 'recurrence' field as it's handled separately
+      if (EDITABLE_TASK_FIELDS.includes(key) && value !== undefined && key !== 'recurrence') {
         taskFields.push(key);
         taskValues.push(value);
         taskPlaceholders.push('?');
@@ -402,11 +434,29 @@ export async function updateTask(taskId: number, data: UpdateTaskDto, userId?: n
   try {
     await connection.beginTransaction();
 
+    // Handle recurrence updates
+    if (data.recurrence) {
+      if (currentTask.RecurrenceId) {
+        // Update existing recurrence
+        await recurrenceService.updateRecurrenceRule(currentTask.RecurrenceId, data.recurrence);
+      } else {
+        // Create new recurrence
+        const recurrenceId = await recurrenceService.createRecurrenceRule(data.recurrence);
+        data.isRecurring = true;
+        data.recurrenceId = recurrenceId;
+      }
+    } else if (data.isRecurring === false && currentTask.RecurrenceId) {
+      // Remove recurrence
+      await recurrenceService.deleteRecurrenceRule(currentTask.RecurrenceId);
+      data.recurrenceId = undefined;
+    }
+
     const updateFields = [];
     const updateValues = [];
 
     for (const [key, value] of Object.entries(data)) {
-      if (EDITABLE_TASK_FIELDS.includes(key) && value !== undefined) {
+      // Skip the 'recurrence' field as it's handled separately
+      if (EDITABLE_TASK_FIELDS.includes(key) && value !== undefined && key !== 'recurrence') {
         updateFields.push(`${key} = ?`);
         updateValues.push(value);
       }

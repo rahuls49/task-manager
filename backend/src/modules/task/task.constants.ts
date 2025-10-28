@@ -132,14 +132,10 @@ export const SQL_QUERIES = {
       t.*,
       ts.StatusName,
       tp.PriorityName,
-      tr.Frequency as RecurrenceFrequency,
-      tr.RecurrenceInterval,
-      tr.EndDate as RecurrenceEndDate,
       pt.Title as ParentTaskTitle
     FROM Tasks t
     LEFT JOIN TaskStatus ts ON t.StatusId = ts.Id
     LEFT JOIN TaskPriority tp ON t.PriorityId = tp.Id
-    LEFT JOIN TaskRecurrence tr ON t.RecurrenceId = tr.Id
     LEFT JOIN Tasks pt ON t.ParentTaskId = pt.Id
     WHERE t.IsDeleted = FALSE
   `,

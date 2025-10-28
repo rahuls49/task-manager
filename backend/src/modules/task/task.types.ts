@@ -31,6 +31,63 @@ export interface UserGroupMember {
   UserId: number;
 }
 
+// ============================================================================
+// NEW RECURRENCE TYPES
+// ============================================================================
+
+export interface RecurrenceRule {
+  Id: number;
+  RecurrenceType: 'DAILY' | 'WEEKLY' | 'MONTHLY';
+  EndDate?: string;
+  DailyRuleId?: number;
+  WeeklyRuleId?: number;
+  MonthlyRuleId?: number;
+}
+
+export interface DailyRule {
+  Id: number;
+  RecurEveryXDays: number; // e.g., 1 = every day, 3 = every 3 days
+  IntraDayFrequencyType?: 'MINUTES' | 'HOURS';
+  IntraDayInterval?: number; // e.g., 30 (minutes), 4 (hours)
+}
+
+export interface WeeklyRule {
+  Id: number;
+  RecurEveryNWeeks: number; // e.g., 1 = every week, 2 = every 2 weeks
+  OnSunday: boolean;
+  OnMonday: boolean;
+  OnTuesday: boolean;
+  OnWednesday: boolean;
+  OnThursday: boolean;
+  OnFriday: boolean;
+  OnSaturday: boolean;
+}
+
+export interface MonthlyRule {
+  Id: number;
+  RuleType: 'BY_DAY_OF_MONTH' | 'BY_ORDINAL_DAY_OF_WEEK';
+}
+
+export interface MonthlyRuleMonth {
+  MonthlyRuleId: number;
+  MonthNumber: number; // 1=Jan, 2=Feb, ..., 12=Dec
+}
+
+export interface MonthlyRuleDay {
+  MonthlyRuleId: number;
+  DayNumber: string; // e.g., '1', '15', '31', 'L' (Last)
+}
+
+export interface MonthlyRuleOrdinal {
+  MonthlyRuleId: number;
+  Ordinal: 'FIRST' | 'SECOND' | 'THIRD' | 'FOURTH' | 'LAST';
+  DayOfWeek: 'SUNDAY' | 'MONDAY' | 'TUESDAY' | 'WEDNESDAY' | 'THURSDAY' | 'FRIDAY' | 'SATURDAY';
+}
+
+// ============================================================================
+// LEGACY RECURRENCE TYPE (for backward compatibility)
+// ============================================================================
+
 export interface TaskRecurrence {
   Id: number;
   Frequency: 'daily' | 'weekly' | 'monthly' | 'yearly';
@@ -93,6 +150,51 @@ export interface EscalationHistory {
   TriggeredAt: Date;
 }
 
+// ============================================================================
+// RECURRENCE DTOs
+// ============================================================================
+
+export interface CreateRecurrenceDto {
+  recurrenceType: 'DAILY' | 'WEEKLY' | 'MONTHLY';
+  endDate?: string;
+  
+  // For DAILY recurrence
+  dailyRule?: {
+    recurEveryXDays: number;
+    intraDayFrequencyType?: 'MINUTES' | 'HOURS';
+    intraDayInterval?: number;
+  };
+  
+  // For WEEKLY recurrence
+  weeklyRule?: {
+    recurEveryNWeeks: number;
+    daysOfWeek: {
+      sunday?: boolean;
+      monday?: boolean;
+      tuesday?: boolean;
+      wednesday?: boolean;
+      thursday?: boolean;
+      friday?: boolean;
+      saturday?: boolean;
+    };
+  };
+  
+  // For MONTHLY recurrence
+  monthlyRule?: {
+    ruleType: 'BY_DAY_OF_MONTH' | 'BY_ORDINAL_DAY_OF_WEEK';
+    months?: number[]; // 1-12, if empty applies to all months
+    
+    // For BY_DAY_OF_MONTH
+    dayNumbers?: string[]; // e.g., ['1', '15', 'L']
+    
+    // For BY_ORDINAL_DAY_OF_WEEK
+    ordinals?: Array<{
+      ordinal: 'FIRST' | 'SECOND' | 'THIRD' | 'FOURTH' | 'LAST';
+      dayOfWeek: 'SUNDAY' | 'MONDAY' | 'TUESDAY' | 'WEDNESDAY' | 'THURSDAY' | 'FRIDAY' | 'SATURDAY';
+    }>;
+  };
+}
+
 // DTOs for API requests
 export interface CreateTaskDto {
   parentTaskId?: number;
@@ -102,6 +204,7 @@ export interface CreateTaskDto {
   dueTime?: string;
   isRecurring?: boolean;
   recurrenceId?: number;
+  recurrence?: CreateRecurrenceDto; // New recurrence structure
   statusId?: number;
   priorityId?: number;
   assigneeIds?: number[];
@@ -117,6 +220,7 @@ export interface UpdateTaskDto {
   priorityId?: number;
   isRecurring?: boolean;
   recurrenceId?: number;
+  recurrence?: CreateRecurrenceDto; // New recurrence structure
 }
 
 export interface AssignTaskDto {
@@ -180,6 +284,24 @@ export interface TaskValidationResult {
   errors: ValidationError[];
 }
 
+// ============================================================================
+// RECURRENCE RESPONSE TYPES
+// ============================================================================
+
+export interface RecurrenceResponse {
+  Id: number;
+  RecurrenceType: 'DAILY' | 'WEEKLY' | 'MONTHLY';
+  EndDate?: string;
+  
+  dailyRule?: DailyRule;
+  weeklyRule?: WeeklyRule;
+  monthlyRule?: MonthlyRule & {
+    months?: MonthlyRuleMonth[];
+    dayNumbers?: MonthlyRuleDay[];
+    ordinals?: MonthlyRuleOrdinal[];
+  };
+}
+
 // Response Types
 export interface TaskResponse extends Task {
   status?: TaskStatus;
@@ -188,7 +310,7 @@ export interface TaskResponse extends Task {
   groups?: GroupMaster[];
   subtasks?: TaskResponse[];
   parentTask?: TaskResponse;
-  recurrence?: TaskRecurrence;
+  recurrence?: RecurrenceResponse; // Updated to use new structure
 }
 
 export interface TaskListResponse {

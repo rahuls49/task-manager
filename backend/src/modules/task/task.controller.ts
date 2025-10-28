@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import * as taskService from "./task.service";
-import { CSVRow, CreateTaskDto, UpdateTaskDto, TaskFilters, AssignTaskDto } from "./task.types";
+import * as recurrenceService from "./recurrence.service";
+import { CSVRow, CreateTaskDto, UpdateTaskDto, TaskFilters, AssignTaskDto, CreateRecurrenceDto } from "./task.types";
 import { Readable } from "stream";
 import csv from 'csv-parser';
 import eventHandler from "@task-manager/event-lib";
@@ -634,4 +635,112 @@ function processCSVRow(row: CSVRow): CSVRow {
   }
   
   return processedRow;
+}
+
+// ============================================================================
+// RECURRENCE MANAGEMENT OPERATIONS
+// ============================================================================
+
+export async function createRecurrence(req: Request, res: Response, next: NextFunction) {
+  try {
+    const recurrenceData: CreateRecurrenceDto = req.body;
+
+    // Validate recurrence data
+    const validation = recurrenceService.validateRecurrenceData(recurrenceData);
+    if (!validation.isValid) {
+      return res.status(400).json({
+        success: false,
+        message: `Recurrence validation failed: ${validation.errors.join(', ')}`,
+        errors: validation.errors
+      });
+    }
+
+    const recurrenceId = await recurrenceService.createRecurrenceRule(recurrenceData);
+    const createdRecurrence = await recurrenceService.getRecurrenceById(recurrenceId);
+
+    return res.status(201).json({
+      success: true,
+      message: "Recurrence rule created successfully",
+      data: createdRecurrence
+    });
+  } catch (error) {
+    if (error instanceof Error) {
+      return res.status(400).json({
+        success: false,
+        message: error.message
+      });
+    }
+    next(error);
+  }
+}
+
+export async function getRecurrence(req: Request, res: Response, next: NextFunction) {
+  try {
+    const recurrenceId = parseInt(req.params.id);
+    const recurrence = await recurrenceService.getRecurrenceById(recurrenceId);
+    
+    if (!recurrence) {
+      return res.status(404).json({
+        success: false,
+        message: "Recurrence rule not found"
+      });
+    }
+    
+    return res.json({
+      success: true,
+      message: "Recurrence rule fetched successfully",
+      data: recurrence
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function updateRecurrence(req: Request, res: Response, next: NextFunction) {
+  try {
+    const recurrenceId = parseInt(req.params.id);
+    const recurrenceData: CreateRecurrenceDto = req.body;
+
+    // Validate recurrence data
+    const validation = recurrenceService.validateRecurrenceData(recurrenceData);
+    if (!validation.isValid) {
+      return res.status(400).json({
+        success: false,
+        message: `Recurrence validation failed: ${validation.errors.join(', ')}`,
+        errors: validation.errors
+      });
+    }
+
+    await recurrenceService.updateRecurrenceRule(recurrenceId, recurrenceData);
+    const updatedRecurrence = await recurrenceService.getRecurrenceById(recurrenceId);
+
+    return res.json({
+      success: true,
+      message: "Recurrence rule updated successfully",
+      data: updatedRecurrence
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('not found')) {
+      return res.status(404).json({
+        success: false,
+        message: error.message
+      });
+    }
+    next(error);
+  }
+}
+
+export async function deleteRecurrence(req: Request, res: Response, next: NextFunction) {
+  try {
+    const recurrenceId = parseInt(req.params.id);
+    
+    await recurrenceService.deleteRecurrenceRule(recurrenceId);
+
+    return res.json({
+      success: true,
+      message: "Recurrence rule deleted successfully"
+    });
+  } catch (error) {
+    next(error);
+  }
 }
