@@ -22,6 +22,7 @@ import {
 } from "./task.types";
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
 import * as recurrenceService from "./recurrence.service";
+import { recurringTaskScheduler } from "@task-manager/rescheduler-lib";
 
 // ============================================================================
 // VALIDATION FUNCTIONS
@@ -322,6 +323,14 @@ export async function createTask(data: CreateTaskDto, userId?: number): Promise<
     throw new Error(`Validation failed: ${validation.errors.map(e => e.message).join(', ')}`);
   }
 
+  // Set default start date/time if not provided
+  if (!data.startDate) {
+    data.startDate = new Date().toISOString().split('T')[0];
+  }
+  if (!data.startTime) {
+    data.startTime = '00:00:00';
+  }
+
   // Convert due date to UTC
   if (data.dueDate) {
     const time = data.dueTime || '00:00';
@@ -334,6 +343,18 @@ export async function createTask(data: CreateTaskDto, userId?: number): Promise<
     data.dueTime = utcISOString.split('T')[1].split('.')[0]; // HH:MM:SS in UTC
     
     console.log(`📅 Task creation: Input ${data.dueDate}T${time} IST -> Stored as ${data.dueDate} ${data.dueTime} UTC`);
+  }
+
+  // Convert start date to UTC
+  if (data.startDate && data.startTime) {
+    const dateTimeStr = `${data.startDate}T${data.startTime}:00+05:30`;
+    const dateObj = new Date(dateTimeStr);
+    
+    const utcISOString = dateObj.toISOString();
+    data.startDate = utcISOString.split('T')[0];
+    data.startTime = utcISOString.split('T')[1].split('.')[0];
+    
+    console.log(`📅 Task start: Input ${data.startDate}T${data.startTime} IST -> Stored as ${data.startDate} ${data.startTime} UTC`);
   }
 
   // Check for circular dependency if parent task is specified
@@ -403,6 +424,14 @@ export async function createTask(data: CreateTaskDto, userId?: number): Promise<
       metadata: { taskData: data }
     });
 
+    // Schedule recurring task if applicable
+    if (data.isRecurring && recurrenceId) {
+      const createdTask = await getTaskById(taskId);
+      if (createdTask) {
+        await recurringTaskScheduler.scheduleTask(createdTask as any);
+      }
+    }
+
     return taskId;
   } catch (error) {
     await connection.rollback();
@@ -425,12 +454,31 @@ export async function updateTask(taskId: number, data: UpdateTaskDto, userId?: n
     throw new Error(`Validation failed: ${validation.errors.map(e => e.message).join(', ')}`);
   }
 
+  // Convert dates to UTC if provided
+  if (data.dueDate && data.dueTime) {
+    const dateTimeStr = `${data.dueDate}T${data.dueTime}:00+05:30`;
+    const dateObj = new Date(dateTimeStr);
+    const utcISOString = dateObj.toISOString();
+    data.dueDate = utcISOString.split('T')[0];
+    data.dueTime = utcISOString.split('T')[1].split('.')[0];
+  }
+
+  if (data.startDate && data.startTime) {
+    const dateTimeStr = `${data.startDate}T${data.startTime}:00+05:30`;
+    const dateObj = new Date(dateTimeStr);
+    const utcISOString = dateObj.toISOString();
+    data.startDate = utcISOString.split('T')[0];
+    data.startTime = utcISOString.split('T')[1].split('.')[0];
+  }
+
   // Validate status transitions
   if (data.statusId && data.statusId !== currentTask.StatusId) {
     await validateStatusTransition(taskId, currentTask.StatusId!, data.statusId);
   }
 
   const connection = await pool.getConnection();
+  let recurrenceChanged = false;
+  
   try {
     await connection.beginTransaction();
 
@@ -439,16 +487,19 @@ export async function updateTask(taskId: number, data: UpdateTaskDto, userId?: n
       if (currentTask.RecurrenceId) {
         // Update existing recurrence
         await recurrenceService.updateRecurrenceRule(currentTask.RecurrenceId, data.recurrence);
+        recurrenceChanged = true;
       } else {
         // Create new recurrence
         const recurrenceId = await recurrenceService.createRecurrenceRule(data.recurrence);
         data.isRecurring = true;
         data.recurrenceId = recurrenceId;
+        recurrenceChanged = true;
       }
     } else if (data.isRecurring === false && currentTask.RecurrenceId) {
       // Remove recurrence
       await recurrenceService.deleteRecurrenceRule(currentTask.RecurrenceId);
       data.recurrenceId = undefined;
+      recurrenceChanged = true;
     }
 
     const updateFields = [];
@@ -474,6 +525,15 @@ export async function updateTask(taskId: number, data: UpdateTaskDto, userId?: n
     }
 
     await connection.commit();
+
+    // Reschedule recurring task if recurrence was changed
+    if (recurrenceChanged && (data.isRecurring || currentTask.IsRecurring)) {
+      if (data.isRecurring) {
+        await recurringTaskScheduler.rescheduleTask(taskId);
+      } else {
+        recurringTaskScheduler.cancelTask(taskId);
+      }
+    }
   } catch (error) {
     await connection.rollback();
     throw error;

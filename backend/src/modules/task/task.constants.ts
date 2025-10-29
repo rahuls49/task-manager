@@ -1,7 +1,7 @@
 // Task field mappings for database operations
 export const EDITABLE_TASK_FIELDS = [
-  'title', 'description', 'dueDate', 'dueTime', 'statusId', 'priorityId', 
-  'parentTaskId', 'isRecurring', 'recurrenceId'
+  'title', 'description', 'startDate', 'startTime', 'dueDate', 'dueTime', 
+  'statusId', 'priorityId', 'parentTaskId', 'isRecurring', 'recurrenceId'
 ];
 
 // Default task statuses

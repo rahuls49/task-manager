@@ -200,6 +200,8 @@ export interface CreateTaskDto {
   parentTaskId?: number;
   title: string;
   description?: string;
+  startDate?: string;
+  startTime?: string;
   dueDate?: string;
   dueTime?: string;
   isRecurring?: boolean;
@@ -214,6 +216,8 @@ export interface CreateTaskDto {
 export interface UpdateTaskDto {
   title?: string;
   description?: string;
+  startDate?: string;
+  startTime?: string;
   dueDate?: string;
   dueTime?: string;
   statusId?: number;
