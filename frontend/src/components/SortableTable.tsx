@@ -96,7 +96,7 @@ export function SortableTable({ tasks, userName, token }: SortableTableProps) {
     {
       accessorKey: 'status',
       header: 'Status',
-      cell: ({ row }) => <StatusSwitch currentStatus={row.original.status} taskId={row.original.Id} token={token} />,
+      cell: ({ row }) => <StatusSwitch currentStatus={row.original.status} taskId={row.original.Id} token={token} taskTypeId={row.original.TaskTypeId} />,
       enableSorting: false,
     },
   ]

@@ -9,6 +9,12 @@ export async function initializeSystem(req: Request, res: Response, next: NextFu
   try {
     await taskInit.initializeTaskSystem();
     
+    // Assign admin role to the user who initialized the system
+    if (req.user && req.user.id) {
+      const userId = parseInt(req.user.id);
+      await taskInit.assignAdminRoleToUser(userId);
+    }
+    
     return res.json({
       success: true,
       message: "Task management system initialized successfully"
@@ -24,8 +30,11 @@ export async function initializeSystem(req: Request, res: Response, next: NextFu
 
 export async function getTaskStatuses(req: Request, res: Response, next: NextFunction) {
   try {
-    const statuses = await taskInit.getTaskStatuses();
-    
+    const { taskTypeId } = req.query;
+    const taskTypeIdNum = taskTypeId ? parseInt(taskTypeId as string) : undefined;
+
+    const statuses = await taskInit.getAvailableStatusesForTaskType(taskTypeIdNum);
+
     return res.json({
       success: true,
       message: "Task statuses fetched successfully",
@@ -258,30 +267,3 @@ export async function removeUserFromGroup(req: Request, res: Response, next: Nex
 // RECURRENCE MANAGEMENT
 // ============================================================================
 
-export async function createTaskRecurrence(req: Request, res: Response, next: NextFunction) {
-  try {
-    const { frequency, interval, endDate, daysOfWeek } = req.body;
-    
-    if (!frequency || !interval) {
-      return res.status(400).json({
-        success: false,
-        message: "Frequency and interval are required"
-      });
-    }
-    
-    const recurrenceId = await taskInit.createTaskRecurrence(
-      frequency, 
-      interval, 
-      endDate, 
-      daysOfWeek
-    );
-    
-    return res.status(201).json({
-      success: true,
-      message: "Task recurrence pattern created successfully",
-      data: { id: recurrenceId, frequency, interval, endDate, daysOfWeek }
-    });
-  } catch (error) {
-    next(error);
-  }
-}

@@ -121,6 +121,7 @@ export interface Task {
   RecurrenceId?: number;
   StatusId?: number;
   PriorityId?: number;
+  TaskTypeId?: number;
   IsEscalated: boolean;
   EscalationLevel: number;
   EscalatedAt?: Date;
@@ -207,6 +208,7 @@ export interface CreateTaskDto {
   isRecurring?: boolean;
   recurrenceId?: number;
   recurrence?: CreateRecurrenceDto; // New recurrence structure
+  taskTypeId: number; // Made required
   statusId?: number;
   priorityId?: number;
   assigneeIds?: number[];
@@ -222,6 +224,7 @@ export interface UpdateTaskDto {
   dueTime?: string;
   statusId?: number;
   priorityId?: number;
+  taskTypeId?: number;
   isRecurring?: boolean;
   recurrenceId?: number;
   recurrence?: CreateRecurrenceDto; // New recurrence structure
@@ -254,6 +257,8 @@ export type TaskEvent =
   | 'task_priority_changed'
   | 'task_due_date_changed'
   | 'task_due_time_changed'
+  | 'task_start_date_changed'
+  | 'task_start_time_changed'
   | 'task_recurrence_modified'
   | 'task_started'
   | 'task_completed'

@@ -20,24 +20,24 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     CredentialsProvider({
       name: "credentials",
       credentials: {
-        userId: { label: "User ID", type: "text" },
+        emailOrPhone: { label: "Email or Phone", type: "text" },
         password: { label: "Password", type: "password" }
       },
       async authorize(credentials) {
-        if (!credentials?.userId || !credentials?.password) {
+        if (!credentials?.emailOrPhone || !credentials?.password) {
           return null
         }
 
         try {
           // Replace 'YOUR_CUSTOM_API_ENDPOINT' with your actual API endpoint
           // Example: 'https://your-api.com/auth/login'
-          const response = await fetch(`${process.env.API_BASE_URL}/auth/login`, {
+          const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/auth/login`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-              userId: credentials.userId,
+              emailOrPhone: credentials.emailOrPhone,
               password: credentials.password,
             }),
           })

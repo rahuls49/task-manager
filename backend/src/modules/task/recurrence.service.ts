@@ -1,15 +1,15 @@
-import pool from "../../lib/connection";
-import { RowDataPacket, ResultSetHeader } from 'mysql2';
-import { 
-  CreateRecurrenceDto, 
-  RecurrenceRule, 
-  DailyRule, 
-  WeeklyRule, 
+import prisma from "../../lib/connection";
+// import { RowDataPacket, ResultSetHeader } from 'mysql2';
+import {
+  CreateRecurrenceDto,
+  RecurrenceRule,
+  DailyRule,
+  WeeklyRule,
   MonthlyRule,
   MonthlyRuleMonth,
   MonthlyRuleDay,
   MonthlyRuleOrdinal,
-  RecurrenceResponse 
+  RecurrenceResponse
 } from "./task.types";
 
 // ============================================================================
@@ -17,125 +17,117 @@ import {
 // ============================================================================
 
 export async function createRecurrenceRule(recurrenceData: CreateRecurrenceDto): Promise<number> {
-  const connection = await pool.getConnection();
-  try {
-    await connection.beginTransaction();
+  let dailyRuleId: number | null = null;
+  let weeklyRuleId: number | null = null;
+  let monthlyRuleId: number | null = null;
 
-    let dailyRuleId: number | null = null;
-    let weeklyRuleId: number | null = null;
-    let monthlyRuleId: number | null = null;
+  // Create specific rule based on type
+  switch (recurrenceData.recurrenceType) {
+    case 'DAILY':
+      if (!recurrenceData.dailyRule) {
+        throw new Error('Daily rule configuration is required for DAILY recurrence');
+      }
+      dailyRuleId = await createDailyRule(recurrenceData.dailyRule);
+      break;
 
-    // Create specific rule based on type
-    switch (recurrenceData.recurrenceType) {
-      case 'DAILY':
-        if (!recurrenceData.dailyRule) {
-          throw new Error('Daily rule configuration is required for DAILY recurrence');
-        }
-        dailyRuleId = await createDailyRule(connection, recurrenceData.dailyRule);
-        break;
+    case 'WEEKLY':
+      if (!recurrenceData.weeklyRule) {
+        throw new Error('Weekly rule configuration is required for WEEKLY recurrence');
+      }
+      weeklyRuleId = await createWeeklyRule(recurrenceData.weeklyRule);
+      break;
 
-      case 'WEEKLY':
-        if (!recurrenceData.weeklyRule) {
-          throw new Error('Weekly rule configuration is required for WEEKLY recurrence');
-        }
-        weeklyRuleId = await createWeeklyRule(connection, recurrenceData.weeklyRule);
-        break;
-
-      case 'MONTHLY':
-        if (!recurrenceData.monthlyRule) {
-          throw new Error('Monthly rule configuration is required for MONTHLY recurrence');
-        }
-        monthlyRuleId = await createMonthlyRule(connection, recurrenceData.monthlyRule);
-        break;
-    }
-
-    // Create main recurrence rule
-    const [result] = await connection.execute<ResultSetHeader>(
-      `INSERT INTO RecurrenceRules 
-       (RecurrenceType, EndDate, DailyRuleId, WeeklyRuleId, MonthlyRuleId) 
-       VALUES (?, ?, ?, ?, ?)`,
-      [recurrenceData.recurrenceType, recurrenceData.endDate || null, dailyRuleId, weeklyRuleId, monthlyRuleId]
-    );
-
-    const recurrenceId = result.insertId;
-
-    await connection.commit();
-    return recurrenceId;
-  } catch (error) {
-    await connection.rollback();
-    throw error;
-  } finally {
-    connection.release();
+    case 'MONTHLY':
+      if (!recurrenceData.monthlyRule) {
+        throw new Error('Monthly rule configuration is required for MONTHLY recurrence');
+      }
+      monthlyRuleId = await createMonthlyRule(recurrenceData.monthlyRule);
+      break;
   }
+
+  // Create main recurrence rule
+  const recurrenceRule = await prisma.recurrenceRule.create({
+    data: {
+      RecurrenceType: recurrenceData.recurrenceType as any,
+      EndDate: recurrenceData.endDate,
+      DailyRuleId: dailyRuleId,
+      WeeklyRuleId: weeklyRuleId,
+      MonthlyRuleId: monthlyRuleId
+    }
+  });
+
+  return Number(recurrenceRule.Id);
 }
 
-async function createDailyRule(connection: any, dailyRule: NonNullable<CreateRecurrenceDto['dailyRule']>): Promise<number> {
-  const [result] = await connection.execute(
-    `INSERT INTO Repeat_DailyRules 
-     (RecurEveryXDays, IntraDayFrequencyType, IntraDayInterval) 
-     VALUES (?, ?, ?)`,
-    [
-      dailyRule.recurEveryXDays,
-      dailyRule.intraDayFrequencyType || null,
-      dailyRule.intraDayInterval || null
-    ]
-  ) as [ResultSetHeader, any];
-  return result.insertId;
+async function createDailyRule(dailyRule: NonNullable<CreateRecurrenceDto['dailyRule']>): Promise<number> {
+  const rule = await prisma.repeatDailyRule.create({
+    data: {
+      RecurEveryXDays: dailyRule.recurEveryXDays,
+      IntraDayFrequencyType: dailyRule.intraDayFrequencyType as any,
+      IntraDayInterval: dailyRule.intraDayInterval
+    }
+  });
+  return Number(rule.Id);
 }
 
-async function createWeeklyRule(connection: any, weeklyRule: NonNullable<CreateRecurrenceDto['weeklyRule']>): Promise<number> {
-  const [result] = await connection.execute(
-    `INSERT INTO Repeat_WeeklyRules 
-     (RecurEveryNWeeks, OnSunday, OnMonday, OnTuesday, OnWednesday, OnThursday, OnFriday, OnSaturday) 
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      weeklyRule.recurEveryNWeeks,
-      weeklyRule.daysOfWeek.sunday || false,
-      weeklyRule.daysOfWeek.monday || false,
-      weeklyRule.daysOfWeek.tuesday || false,
-      weeklyRule.daysOfWeek.wednesday || false,
-      weeklyRule.daysOfWeek.thursday || false,
-      weeklyRule.daysOfWeek.friday || false,
-      weeklyRule.daysOfWeek.saturday || false
-    ]
-  ) as [ResultSetHeader, any];
-  return result.insertId;
+async function createWeeklyRule(weeklyRule: NonNullable<CreateRecurrenceDto['weeklyRule']>): Promise<number> {
+  const rule = await prisma.repeatWeeklyRule.create({
+    data: {
+      RecurEveryNWeeks: weeklyRule.recurEveryNWeeks,
+      OnSunday: weeklyRule.daysOfWeek.sunday || false,
+      OnMonday: weeklyRule.daysOfWeek.monday || false,
+      OnTuesday: weeklyRule.daysOfWeek.tuesday || false,
+      OnWednesday: weeklyRule.daysOfWeek.wednesday || false,
+      OnThursday: weeklyRule.daysOfWeek.thursday || false,
+      OnFriday: weeklyRule.daysOfWeek.friday || false,
+      OnSaturday: weeklyRule.daysOfWeek.saturday || false
+    }
+  });
+  return Number(rule.Id);
 }
 
-async function createMonthlyRule(connection: any, monthlyRule: NonNullable<CreateRecurrenceDto['monthlyRule']>): Promise<number> {
+async function createMonthlyRule(monthlyRule: NonNullable<CreateRecurrenceDto['monthlyRule']>): Promise<number> {
   // Create base monthly rule
-  const [result] = await connection.execute(
-    `INSERT INTO Repeat_MonthlyRules (RuleType) VALUES (?)`,
-    [monthlyRule.ruleType]
-  ) as [ResultSetHeader, any];
-  const monthlyRuleId = result.insertId;
+  const rule = await prisma.repeatMonthlyRule.create({
+    data: {
+      RuleType: monthlyRule.ruleType as any
+    }
+  });
+  const monthlyRuleId = Number(rule.Id);
 
   // Add months (default to all months if none specified)
-  const months = monthlyRule.months && monthlyRule.months.length > 0 
-    ? monthlyRule.months 
+  const months = monthlyRule.months && monthlyRule.months.length > 0
+    ? monthlyRule.months
     : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
   for (const month of months) {
-    await connection.execute(
-      `INSERT INTO Repeat_MonthlyRule_Months (MonthlyRuleId, MonthNumber) VALUES (?, ?)`,
-      [monthlyRuleId, month]
-    );
+    await prisma.repeatMonthlyRuleMonth.create({
+      data: {
+        MonthlyRuleId: monthlyRuleId,
+        MonthNumber: month
+      }
+    });
   }
 
   // Add specific day numbers or ordinals based on rule type
   if (monthlyRule.ruleType === 'BY_DAY_OF_MONTH' && monthlyRule.dayNumbers) {
     for (const dayNumber of monthlyRule.dayNumbers) {
-      await connection.execute(
-        `INSERT INTO Repeat_MonthlyRule_Days (MonthlyRuleId, DayNumber) VALUES (?, ?)`,
-        [monthlyRuleId, dayNumber]
-      );
+      await prisma.repeatMonthlyRuleDay.create({
+        data: {
+          MonthlyRuleId: monthlyRuleId,
+          DayNumber: dayNumber
+        }
+      });
     }
   } else if (monthlyRule.ruleType === 'BY_ORDINAL_DAY_OF_WEEK' && monthlyRule.ordinals) {
     for (const ordinal of monthlyRule.ordinals) {
-      await connection.execute(
-        `INSERT INTO Repeat_MonthlyRule_Ordinals (MonthlyRuleId, Ordinal, DayOfWeek) VALUES (?, ?, ?)`,
-        [monthlyRuleId, ordinal.ordinal, ordinal.dayOfWeek]
-      );
+      await prisma.repeatMonthlyRuleOrdinal.create({
+        data: {
+          MonthlyRuleId: monthlyRuleId,
+          Ordinal: ordinal.ordinal as any,
+          DayOfWeek: ordinal.dayOfWeek as any
+        }
+      });
     }
   }
 
@@ -148,39 +140,79 @@ async function createMonthlyRule(connection: any, monthlyRule: NonNullable<Creat
 
 export async function getRecurrenceById(recurrenceId: number): Promise<RecurrenceResponse | null> {
   // Get main recurrence rule
-  const [recurrenceRows] = await pool.query<RowDataPacket[]>(
-    `SELECT * FROM RecurrenceRules WHERE Id = ?`,
-    [recurrenceId]
-  );
+  const recurrence = await prisma.recurrenceRule.findUnique({
+    where: { Id: recurrenceId },
+    include: {
+      DailyRule: true,
+      WeeklyRule: true,
+      MonthlyRule: {
+        include: {
+          Months: true,
+          Days: true,
+          Ordinals: true
+        }
+      }
+    }
+  });
 
-  if (recurrenceRows.length === 0) {
+  if (!recurrence) {
     return null;
   }
 
-  const recurrence = recurrenceRows[0] as RecurrenceRule;
   const response: RecurrenceResponse = {
-    Id: recurrence.Id,
+    Id: Number(recurrence.Id),
     RecurrenceType: recurrence.RecurrenceType,
-    EndDate: recurrence.EndDate
+    EndDate: recurrence.EndDate?.toISOString().split('T')[0]
   };
 
   // Get specific rule details based on type
   switch (recurrence.RecurrenceType) {
     case 'DAILY':
-      if (recurrence.DailyRuleId) {
-        response.dailyRule = await getDailyRule(recurrence.DailyRuleId);
+      if (recurrence.DailyRule) {
+        response.dailyRule = {
+          Id: Number(recurrence.DailyRule.Id),
+          RecurEveryXDays: recurrence.DailyRule.RecurEveryXDays,
+          IntraDayFrequencyType: recurrence.DailyRule.IntraDayFrequencyType || undefined,
+          IntraDayInterval: recurrence.DailyRule.IntraDayInterval || undefined
+        };
       }
       break;
 
     case 'WEEKLY':
-      if (recurrence.WeeklyRuleId) {
-        response.weeklyRule = await getWeeklyRule(recurrence.WeeklyRuleId);
+      if (recurrence.WeeklyRule) {
+        response.weeklyRule = {
+          Id: Number(recurrence.WeeklyRule.Id),
+          RecurEveryNWeeks: recurrence.WeeklyRule.RecurEveryNWeeks,
+          OnSunday: recurrence.WeeklyRule.OnSunday,
+          OnMonday: recurrence.WeeklyRule.OnMonday,
+          OnTuesday: recurrence.WeeklyRule.OnTuesday,
+          OnWednesday: recurrence.WeeklyRule.OnWednesday,
+          OnThursday: recurrence.WeeklyRule.OnThursday,
+          OnFriday: recurrence.WeeklyRule.OnFriday,
+          OnSaturday: recurrence.WeeklyRule.OnSaturday
+        };
       }
       break;
 
     case 'MONTHLY':
-      if (recurrence.MonthlyRuleId) {
-        response.monthlyRule = await getMonthlyRule(recurrence.MonthlyRuleId);
+      if (recurrence.MonthlyRule) {
+        response.monthlyRule = {
+          Id: Number(recurrence.MonthlyRule.Id),
+          RuleType: recurrence.MonthlyRule.RuleType,
+          months: recurrence.MonthlyRule.Months.map(m => ({
+            MonthlyRuleId: Number(m.MonthlyRuleId),
+            MonthNumber: m.MonthNumber
+          })),
+          dayNumbers: recurrence.MonthlyRule.Days.map(d => ({
+            MonthlyRuleId: Number(d.MonthlyRuleId),
+            DayNumber: d.DayNumber
+          })),
+          ordinals: recurrence.MonthlyRule.Ordinals.map(o => ({
+            MonthlyRuleId: Number(o.MonthlyRuleId),
+            Ordinal: o.Ordinal,
+            DayOfWeek: o.DayOfWeek
+          }))
+        };
       }
       break;
   }
@@ -189,19 +221,34 @@ export async function getRecurrenceById(recurrenceId: number): Promise<Recurrenc
 }
 
 async function getDailyRule(dailyRuleId: number): Promise<DailyRule> {
-  const [rows] = await pool.query<RowDataPacket[]>(
-    `SELECT * FROM Repeat_DailyRules WHERE Id = ?`,
-    [dailyRuleId]
-  );
-  return rows[0] as DailyRule;
+  const rule = await prisma.repeatDailyRule.findUnique({
+    where: { Id: dailyRuleId }
+  });
+  if (!rule) throw new Error('Daily rule not found');
+  return {
+    Id: Number(rule.Id),
+    RecurEveryXDays: rule.RecurEveryXDays,
+    IntraDayFrequencyType: rule.IntraDayFrequencyType || undefined,
+    IntraDayInterval: rule.IntraDayInterval || undefined
+  };
 }
 
 async function getWeeklyRule(weeklyRuleId: number): Promise<WeeklyRule> {
-  const [rows] = await pool.query<RowDataPacket[]>(
-    `SELECT * FROM Repeat_WeeklyRules WHERE Id = ?`,
-    [weeklyRuleId]
-  );
-  return rows[0] as WeeklyRule;
+  const rule = await prisma.repeatWeeklyRule.findUnique({
+    where: { Id: weeklyRuleId }
+  });
+  if (!rule) throw new Error('Weekly rule not found');
+  return {
+    Id: Number(rule.Id),
+    RecurEveryNWeeks: rule.RecurEveryNWeeks,
+    OnSunday: rule.OnSunday,
+    OnMonday: rule.OnMonday,
+    OnTuesday: rule.OnTuesday,
+    OnWednesday: rule.OnWednesday,
+    OnThursday: rule.OnThursday,
+    OnFriday: rule.OnFriday,
+    OnSaturday: rule.OnSaturday
+  };
 }
 
 async function getMonthlyRule(monthlyRuleId: number): Promise<MonthlyRule & {
@@ -209,42 +256,32 @@ async function getMonthlyRule(monthlyRuleId: number): Promise<MonthlyRule & {
   dayNumbers?: MonthlyRuleDay[];
   ordinals?: MonthlyRuleOrdinal[];
 }> {
-  // Get base monthly rule
-  const [ruleRows] = await pool.query<RowDataPacket[]>(
-    `SELECT * FROM Repeat_MonthlyRules WHERE Id = ?`,
-    [monthlyRuleId]
-  );
-  const monthlyRule = ruleRows[0] as MonthlyRule;
-
-  // Get months
-  const [monthRows] = await pool.query<RowDataPacket[]>(
-    `SELECT * FROM Repeat_MonthlyRule_Months WHERE MonthlyRuleId = ?`,
-    [monthlyRuleId]
-  );
-
-  // Get day numbers or ordinals based on rule type
-  let dayNumbers: MonthlyRuleDay[] = [];
-  let ordinals: MonthlyRuleOrdinal[] = [];
-
-  if (monthlyRule.RuleType === 'BY_DAY_OF_MONTH') {
-    const [dayRows] = await pool.query<RowDataPacket[]>(
-      `SELECT * FROM Repeat_MonthlyRule_Days WHERE MonthlyRuleId = ?`,
-      [monthlyRuleId]
-    );
-    dayNumbers = dayRows as MonthlyRuleDay[];
-  } else if (monthlyRule.RuleType === 'BY_ORDINAL_DAY_OF_WEEK') {
-    const [ordinalRows] = await pool.query<RowDataPacket[]>(
-      `SELECT * FROM Repeat_MonthlyRule_Ordinals WHERE MonthlyRuleId = ?`,
-      [monthlyRuleId]
-    );
-    ordinals = ordinalRows as MonthlyRuleOrdinal[];
-  }
+  const rule = await prisma.repeatMonthlyRule.findUnique({
+    where: { Id: monthlyRuleId },
+    include: {
+      Months: true,
+      Days: true,
+      Ordinals: true
+    }
+  });
+  if (!rule) throw new Error('Monthly rule not found');
 
   return {
-    ...monthlyRule,
-    months: monthRows as MonthlyRuleMonth[],
-    dayNumbers,
-    ordinals
+    Id: Number(rule.Id),
+    RuleType: rule.RuleType,
+    months: rule.Months.map(m => ({
+      MonthlyRuleId: Number(m.MonthlyRuleId),
+      MonthNumber: m.MonthNumber
+    })),
+    dayNumbers: rule.Days.map(d => ({
+      MonthlyRuleId: Number(d.MonthlyRuleId),
+      DayNumber: d.DayNumber
+    })),
+    ordinals: rule.Ordinals.map(o => ({
+      MonthlyRuleId: Number(o.MonthlyRuleId),
+      Ordinal: o.Ordinal,
+      DayOfWeek: o.DayOfWeek
+    }))
   };
 }
 
@@ -253,84 +290,146 @@ async function getMonthlyRule(monthlyRuleId: number): Promise<MonthlyRule & {
 // ============================================================================
 
 export async function updateRecurrenceRule(recurrenceId: number, recurrenceData: CreateRecurrenceDto): Promise<void> {
-  const connection = await pool.getConnection();
-  try {
-    await connection.beginTransaction();
-
-    // Get current recurrence rule
-    const [currentRows] = await connection.query<RowDataPacket[]>(
-      `SELECT * FROM RecurrenceRules WHERE Id = ?`,
-      [recurrenceId]
-    );
-
-    if (currentRows.length === 0) {
-      throw new Error('Recurrence rule not found');
+  // Get current recurrence rule
+  const currentRule = await prisma.recurrenceRule.findUnique({
+    where: { Id: recurrenceId },
+    include: {
+      DailyRule: true,
+      WeeklyRule: true,
+      MonthlyRule: true
     }
+  });
 
-    const currentRule = currentRows[0] as RecurrenceRule;
-
-    // Delete old specific rules
-    if (currentRule.DailyRuleId) {
-      await connection.execute(`DELETE FROM Repeat_DailyRules WHERE Id = ?`, [currentRule.DailyRuleId]);
-    }
-    if (currentRule.WeeklyRuleId) {
-      await connection.execute(`DELETE FROM Repeat_WeeklyRules WHERE Id = ?`, [currentRule.WeeklyRuleId]);
-    }
-    if (currentRule.MonthlyRuleId) {
-      await deleteMonthlyRule(connection, currentRule.MonthlyRuleId);
-    }
-
-    // Create new specific rules
-    let dailyRuleId: number | null = null;
-    let weeklyRuleId: number | null = null;
-    let monthlyRuleId: number | null = null;
-
-    switch (recurrenceData.recurrenceType) {
-      case 'DAILY':
-        if (!recurrenceData.dailyRule) {
-          throw new Error('Daily rule configuration is required for DAILY recurrence');
-        }
-        dailyRuleId = await createDailyRule(connection, recurrenceData.dailyRule);
-        break;
-
-      case 'WEEKLY':
-        if (!recurrenceData.weeklyRule) {
-          throw new Error('Weekly rule configuration is required for WEEKLY recurrence');
-        }
-        weeklyRuleId = await createWeeklyRule(connection, recurrenceData.weeklyRule);
-        break;
-
-      case 'MONTHLY':
-        if (!recurrenceData.monthlyRule) {
-          throw new Error('Monthly rule configuration is required for MONTHLY recurrence');
-        }
-        monthlyRuleId = await createMonthlyRule(connection, recurrenceData.monthlyRule);
-        break;
-    }
-
-    // Update main recurrence rule
-    await connection.execute(
-      `UPDATE RecurrenceRules 
-       SET RecurrenceType = ?, EndDate = ?, DailyRuleId = ?, WeeklyRuleId = ?, MonthlyRuleId = ?
-       WHERE Id = ?`,
-      [recurrenceData.recurrenceType, recurrenceData.endDate || null, dailyRuleId, weeklyRuleId, monthlyRuleId, recurrenceId]
-    );
-
-    await connection.commit();
-  } catch (error) {
-    await connection.rollback();
-    throw error;
-  } finally {
-    connection.release();
+  if (!currentRule) {
+    throw new Error('Recurrence rule not found');
   }
+
+  // Delete old specific rules
+  if (currentRule.DailyRule) {
+    await prisma.repeatDailyRule.delete({
+      where: { Id: currentRule.DailyRule.Id }
+    });
+  }
+  if (currentRule.WeeklyRule) {
+    await deleteMonthlyRulePrisma(currentRule.WeeklyRule.Id);
+  }
+  if (currentRule.MonthlyRule) {
+    await deleteMonthlyRulePrisma(currentRule.MonthlyRule.Id);
+  }
+
+  // Create new specific rules
+  let dailyRuleId: bigint | null = null;
+  let weeklyRuleId: bigint | null = null;
+  let monthlyRuleId: bigint | null = null;
+
+  switch (recurrenceData.recurrenceType) {
+    case 'DAILY':
+      if (!recurrenceData.dailyRule) {
+        throw new Error('Daily rule configuration is required for DAILY recurrence');
+      }
+      const dailyRule = await prisma.repeatDailyRule.create({
+        data: {
+          RecurEveryXDays: recurrenceData.dailyRule.recurEveryXDays,
+          IntraDayFrequencyType: recurrenceData.dailyRule.intraDayFrequencyType,
+          IntraDayInterval: recurrenceData.dailyRule.intraDayInterval
+        }
+      });
+      dailyRuleId = dailyRule.Id;
+      break;
+
+    case 'WEEKLY':
+      if (!recurrenceData.weeklyRule) {
+        throw new Error('Weekly rule configuration is required for WEEKLY recurrence');
+      }
+      const weeklyRule = await prisma.repeatWeeklyRule.create({
+        data: {
+          RecurEveryNWeeks: recurrenceData.weeklyRule.recurEveryNWeeks,
+          OnSunday: recurrenceData.weeklyRule.daysOfWeek.sunday,
+          OnMonday: recurrenceData.weeklyRule.daysOfWeek.monday,
+          OnTuesday: recurrenceData.weeklyRule.daysOfWeek.tuesday,
+          OnWednesday: recurrenceData.weeklyRule.daysOfWeek.wednesday,
+          OnThursday: recurrenceData.weeklyRule.daysOfWeek.thursday,
+          OnFriday: recurrenceData.weeklyRule.daysOfWeek.friday,
+          OnSaturday: recurrenceData.weeklyRule.daysOfWeek.saturday
+        }
+      });
+      weeklyRuleId = weeklyRule.Id;
+      break;
+
+    case 'MONTHLY':
+      if (!recurrenceData.monthlyRule) {
+        throw new Error('Monthly rule configuration is required for MONTHLY recurrence');
+      }
+      const monthlyRule = await createMonthlyRulePrisma(recurrenceData.monthlyRule);
+      monthlyRuleId = monthlyRule.Id;
+      break;
+  }
+
+  // Update main recurrence rule
+  await prisma.recurrenceRule.update({
+    where: { Id: recurrenceId },
+    data: {
+      RecurrenceType: recurrenceData.recurrenceType,
+      EndDate: recurrenceData.endDate ? new Date(recurrenceData.endDate) : null,
+      DailyRuleId: dailyRuleId,
+      WeeklyRuleId: weeklyRuleId,
+      MonthlyRuleId: monthlyRuleId
+    }
+  });
 }
 
-async function deleteMonthlyRule(connection: any, monthlyRuleId: number): Promise<void> {
+async function deleteMonthlyRulePrisma(monthlyRuleId: bigint): Promise<void> {
   // Delete related records first due to foreign key constraints
-  await connection.execute(`DELETE FROM Repeat_MonthlyRule_Months WHERE MonthlyRuleId = ?`, [monthlyRuleId]);
-  await connection.execute(`DELETE FROM Repeat_MonthlyRule_Days WHERE MonthlyRuleId = ?`, [monthlyRuleId]);
-  await connection.execute(`DELETE FROM Repeat_MonthlyRule_Ordinals WHERE MonthlyRuleId = ?`, [monthlyRuleId]);
-  await connection.execute(`DELETE FROM Repeat_MonthlyRules WHERE Id = ?`, [monthlyRuleId]);
+  await prisma.repeatMonthlyRuleMonth.deleteMany({
+    where: { MonthlyRuleId: monthlyRuleId }
+  });
+  await prisma.repeatMonthlyRuleDay.deleteMany({
+    where: { MonthlyRuleId: monthlyRuleId }
+  });
+  await prisma.repeatMonthlyRuleOrdinal.deleteMany({
+    where: { MonthlyRuleId: monthlyRuleId }
+  });
+  await prisma.repeatMonthlyRule.delete({
+    where: { Id: monthlyRuleId }
+  });
+}
+
+async function createMonthlyRulePrisma(monthlyRuleData: any): Promise<any> {
+  const monthlyRule = await prisma.repeatMonthlyRule.create({
+    data: {
+      RuleType: monthlyRuleData.ruleType
+    }
+  });
+
+  // Create months if provided
+  if (monthlyRuleData.months) {
+    await prisma.repeatMonthlyRuleMonth.createMany({
+      data: monthlyRuleData.months.map((month: number) => ({
+        MonthlyRuleId: monthlyRule.Id,
+        MonthNumber: month
+      }))
+    });
+  }
+
+  // Create days or ordinals based on rule type
+  if (monthlyRuleData.ruleType === 'BY_DAY_OF_MONTH' && monthlyRuleData.dayNumbers) {
+    await prisma.repeatMonthlyRuleDay.createMany({
+      data: monthlyRuleData.dayNumbers.map((day: number) => ({
+        MonthlyRuleId: monthlyRule.Id,
+        DayNumber: day
+      }))
+    });
+  } else if (monthlyRuleData.ruleType === 'BY_ORDINAL_DAY_OF_WEEK' && monthlyRuleData.ordinals) {
+    await prisma.repeatMonthlyRuleOrdinal.createMany({
+      data: monthlyRuleData.ordinals.map((ordinal: any) => ({
+        MonthlyRuleId: monthlyRule.Id,
+        Ordinal: ordinal.ordinal,
+        DayOfWeek: ordinal.dayOfWeek
+      }))
+    });
+  }
+
+  return monthlyRule;
 }
 
 // ============================================================================
@@ -338,43 +437,39 @@ async function deleteMonthlyRule(connection: any, monthlyRuleId: number): Promis
 // ============================================================================
 
 export async function deleteRecurrenceRule(recurrenceId: number): Promise<void> {
-  const connection = await pool.getConnection();
-  try {
-    await connection.beginTransaction();
-
-    // Get current recurrence rule
-    const [currentRows] = await connection.query<RowDataPacket[]>(
-      `SELECT * FROM RecurrenceRules WHERE Id = ?`,
-      [recurrenceId]
-    );
-
-    if (currentRows.length === 0) {
-      return; // Already deleted or doesn't exist
+  // Get current recurrence rule
+  const currentRule = await prisma.recurrenceRule.findUnique({
+    where: { Id: recurrenceId },
+    include: {
+      DailyRule: true,
+      WeeklyRule: true,
+      MonthlyRule: true
     }
+  });
 
-    const currentRule = currentRows[0] as RecurrenceRule;
-
-    // Delete specific rules
-    if (currentRule.DailyRuleId) {
-      await connection.execute(`DELETE FROM Repeat_DailyRules WHERE Id = ?`, [currentRule.DailyRuleId]);
-    }
-    if (currentRule.WeeklyRuleId) {
-      await connection.execute(`DELETE FROM Repeat_WeeklyRules WHERE Id = ?`, [currentRule.WeeklyRuleId]);
-    }
-    if (currentRule.MonthlyRuleId) {
-      await deleteMonthlyRule(connection, currentRule.MonthlyRuleId);
-    }
-
-    // Delete main recurrence rule
-    await connection.execute(`DELETE FROM RecurrenceRules WHERE Id = ?`, [recurrenceId]);
-
-    await connection.commit();
-  } catch (error) {
-    await connection.rollback();
-    throw error;
-  } finally {
-    connection.release();
+  if (!currentRule) {
+    return; // Already deleted or doesn't exist
   }
+
+  // Delete specific rules
+  if (currentRule.DailyRule) {
+    await prisma.repeatDailyRule.delete({
+      where: { Id: currentRule.DailyRule.Id }
+    });
+  }
+  if (currentRule.WeeklyRule) {
+    await prisma.repeatWeeklyRule.delete({
+      where: { Id: currentRule.WeeklyRule.Id }
+    });
+  }
+  if (currentRule.MonthlyRule) {
+    await deleteMonthlyRulePrisma(currentRule.MonthlyRule.Id);
+  }
+
+  // Delete main recurrence rule
+  await prisma.recurrenceRule.delete({
+    where: { Id: recurrenceId }
+  });
 }
 
 // ============================================================================

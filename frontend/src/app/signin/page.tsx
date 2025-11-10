@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label"
 import toast from "react-hot-toast"
 
 export default function SignIn() {
-    const [userId, setUserId] = useState("")
+    const [emailOrPhone, setEmailOrPhone] = useState("")
     const [password, setPassword] = useState("")
     const [error, setError] = useState("")
     const router = useRouter()
@@ -19,14 +19,15 @@ export default function SignIn() {
         setError("")
 
         const result = await signIn("credentials", {
-            userId,
+            emailOrPhone,
             password,
             redirect: false,
         })
 
         if (result?.error) {
-            toast.error("Invalid Userid or Password")
+            toast.error("Invalid Email/Phone or Password")
             setError("Invalid credentials")
+            console.error(result?.error)
         } else {
             toast.success("Signed in successfully")
             router.push("/")
@@ -39,12 +40,12 @@ export default function SignIn() {
                 <h1 className="text-2xl font-bold mb-6 text-center">Sign In</h1>
                 {error && <p className="text-red-500 mb-4">{error}</p>}
                 <div className="mb-4">
-                    <Label htmlFor="userId" className="mb-2">User ID</Label>
+                    <Label htmlFor="emailOrPhone" className="mb-2">Email or Phone</Label>
                     <Input
                         type="text"
-                        name="userId"
-                        value={userId}
-                        onChange={(e) => setUserId(e.target.value)}
+                        name="emailOrPhone"
+                        value={emailOrPhone}
+                        onChange={(e) => setEmailOrPhone(e.target.value)}
                         required
                     />
                 </div>

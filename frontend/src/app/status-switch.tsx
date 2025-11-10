@@ -12,15 +12,15 @@ import toast from "react-hot-toast";
 import axios from "axios";
 import { ChevronDown } from "lucide-react";
 
-export default function StatusSwitch({ currentStatus, taskId, token }: { currentStatus: Status, taskId: number, token: string }) {
+export default function StatusSwitch({ currentStatus, taskId, token, taskTypeId }: { currentStatus: Status, taskId: number, token: string, taskTypeId?: number }) {
   const [activeStatus, setActiveStatus] = useState<Status>(currentStatus);
   const [statuses, setStatuses] = useState<Status[]>([]);
   useEffect(() => {
     const fetchData = async () => {
       try {
-        console.log('Fetching statuses from:', `${process.env.NEXT_PUBLIC_API_BASE_URL}/management/statuses`);
+        console.log('Fetching statuses from:', `${process.env.NEXT_PUBLIC_API_BASE_URL}/management/statuses${taskTypeId ? `?taskTypeId=${taskTypeId}` : ''}`);
         console.log('With token:', token);
-        const statusList = await axios.get(`${process.env.NEXT_PUBLIC_API_BASE_URL}/management/statuses`, {
+        const statusList = await axios.get(`${process.env.NEXT_PUBLIC_API_BASE_URL}/management/statuses${taskTypeId ? `?taskTypeId=${taskTypeId}` : ''}`, {
           headers: {
             Authorization: `Bearer ${token}`
           }
@@ -63,7 +63,7 @@ export default function StatusSwitch({ currentStatus, taskId, token }: { current
       </button>
     </DropdownMenuTrigger>
     <DropdownMenuContent
-      align="start"
+      align="end"
       className="w-48"
     >
       {statuses.map((statusItem: Status) => (

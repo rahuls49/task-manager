@@ -9,6 +9,7 @@ export interface Task {
     RecurrenceId?: number,
     StatusId: number,
     PriorityId: number,
+    TaskTypeId?: number,
     IsEscalated: number,
     EscalationLevel: number,
     EscalatedAt?: string,

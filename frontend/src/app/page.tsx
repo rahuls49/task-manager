@@ -9,7 +9,8 @@ export default async function Home() {
   if (!session) {
     redirect('/signin')
   }
-  const tasks = await axios.get(`${process.env.API_BASE_URL}/tasks`, {
+
+  const tasks = await axios.get(`${process.env.NEXT_PUBLIC_API_BASE_URL}/tasks`, {
     headers: {
       Authorization: `Bearer ${session?.user?.token}`
     }

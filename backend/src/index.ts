@@ -18,7 +18,7 @@ app.use(cors(
   { origin: true, credentials: true }
 ));
 
-app.use('/tasks', verifyAuthToken, taskRouter);
+app.use('/tasks', taskRouter);
 app.use('/system', taskSystemRouter);
 app.use('/auth', authRouter);
 app.use('/management', managementRouter);

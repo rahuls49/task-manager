@@ -4,10 +4,34 @@ import {
     getDueTasks,
     getTaskStats,
     getSchedulerConfig,
-    updateSchedulerConfig
+    updateSchedulerConfig,
+    getTaskTypes,
+    createTaskType,
+    getTaskTypeById,
+    getAvailableStatusesForTaskType
 } from "./task.controller";
 
 const taskSystemRouter = Router();
+
+// ============================================================================
+// TASK TYPE OPERATIONS
+// ============================================================================
+
+// Get all task types
+taskSystemRouter.get('/task-types', getTaskTypes);
+
+// Create new task type
+taskSystemRouter.post('/task-types', createTaskType);
+
+// Get task type by ID
+taskSystemRouter.get('/task-types/:id', getTaskTypeById);
+
+// Get available statuses for a task type
+taskSystemRouter.get('/task-types/:taskTypeId/statuses', getAvailableStatusesForTaskType);
+
+// ============================================================================
+// SYSTEM TASK OPERATIONS
+// ============================================================================
 
 // Get overdue tasks
 taskSystemRouter.get('/tasks/overdue', getOverdueTasks);

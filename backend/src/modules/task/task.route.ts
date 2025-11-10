@@ -1,5 +1,6 @@
 import { Router } from "express";
 import multer from 'multer';
+import verifyAuthToken from "../../middlewares/auth-middleware";
 import { 
   createTask, 
   getTasks, 
@@ -20,7 +21,8 @@ import {
   createRecurrence,
   getRecurrence,
   updateRecurrence,
-  deleteRecurrence
+  deleteRecurrence,
+  getAvailableStatusesForTaskType
 } from "./task.controller";
 
 const taskRouter = Router();
@@ -47,7 +49,7 @@ const upload = multer({
 // ============================================================================
 
 // Get all tasks with filtering and pagination
-taskRouter.get('/', getTasks);
+taskRouter.get('/', verifyAuthToken, getTasks);
 
 // Get tasks with filters from request body
 taskRouter.post('/list', listTasks);
@@ -56,13 +58,16 @@ taskRouter.post('/list', listTasks);
 taskRouter.get('/:id', getTaskById);
 
 // Create new task
-taskRouter.post('/', createTask);
+taskRouter.post('/', verifyAuthToken, createTask);
 
 // Update task
 taskRouter.put('/:id', updateTask);
 
 // Delete task (soft delete)
 taskRouter.delete('/:id', deleteTask);
+
+// Get available statuses for a task
+taskRouter.get('/:id/available-statuses', getAvailableStatusesForTaskType);
 
 // ============================================================================
 // TASK ASSIGNMENT OPERATIONS

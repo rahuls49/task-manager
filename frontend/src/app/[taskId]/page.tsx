@@ -19,12 +19,12 @@ export default async function TaskPage({
     if (Number.isNaN(parseInt(taskId))) {
         redirect('/')
     }
-    const task = await axios.get(`${process.env.API_BASE_URL}/tasks/${taskId}`, {
+    const task = await axios.get(`${process.env.NEXT_PUBLIC_API_BASE_URL}/tasks/${taskId}`, {
         headers: {
             Authorization: `Bearer ${session?.user?.token}`
         }
     })
-    const status= await axios.get(`${process.env.API_BASE_URL}/management/statuses`, {
+    const status= await axios.get(`${process.env.NEXT_PUBLIC_API_BASE_URL}/management/statuses`, {
         headers: {
             Authorization: `Bearer ${session?.user?.token}`
         }

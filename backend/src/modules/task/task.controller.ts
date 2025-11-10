@@ -5,6 +5,44 @@ import { CSVRow, CreateTaskDto, UpdateTaskDto, TaskFilters, AssignTaskDto, Creat
 import { Readable } from "stream";
 import csv from 'csv-parser';
 import eventHandler from "@task-manager/event-lib";
+import * as taskTypeService from "./task-type.service";
+import * as taskInit from "./task.init";
+
+// Helper function to convert BigInt to number and Date objects to strings in response data
+function serializeBigInt(obj: any): any {
+  if (obj === null || obj === undefined) return obj;
+  if (typeof obj === 'bigint') return Number(obj);
+  if (obj instanceof Date) {
+    // For Date objects, check if valid
+    if (isNaN(obj.getTime())) {
+      return null; // Invalid date
+    }
+    // Format based on field name context - this is a heuristic
+    // For DATE fields (year-based), return YYYY-MM-DD
+    // For TIME fields (time-based), return HH:MM:SS
+    // For other dates, return ISO string
+    const iso = obj.toISOString();
+    if (obj.getFullYear() > 1970 && obj.getFullYear() < 3000) {
+      // Likely a DATE field
+      return iso.split('T')[0];
+    } else if (obj.getFullYear() === 1970) {
+      // Likely a TIME field (Prisma returns 1970-01-01 for TIME columns)
+      return iso.split('T')[1].split('.')[0];
+    } else {
+      // Other dates
+      return iso;
+    }
+  }
+  if (Array.isArray(obj)) return obj.map(serializeBigInt);
+  if (typeof obj === 'object') {
+    const result: any = {};
+    for (const key in obj) {
+      result[key] = serializeBigInt(obj[key]);
+    }
+    return result;
+  }
+  return obj;
+}
 
 // ============================================================================
 // CORE TASK OPERATIONS
@@ -12,15 +50,23 @@ import eventHandler from "@task-manager/event-lib";
 
 export async function getTasks(req: Request, res: Response, next: NextFunction) {
   try {
+    const userId = req.user?.id ? parseInt(req.user.id as string) : undefined;
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "User not authenticated"
+      });
+    }
+
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 50;
 
-    const result = await taskService.getTasks(page, limit);
+    const result = await taskService.getTasks(userId, page, limit);
     
     return res.json({
       success: true,
       message: "Tasks fetched successfully",
-      data: result.tasks,
+      data: serializeBigInt(result.tasks),
       pagination: {
         page,
         limit,
@@ -52,7 +98,7 @@ export async function listTasks(req: Request, res: Response, next: NextFunction)
     return res.json({
       success: true,
       message: "Tasks fetched successfully",
-      data: result.tasks,
+      data: serializeBigInt(result.tasks),
       pagination: {
         page,
         limit,
@@ -80,7 +126,7 @@ export async function getTaskById(req: Request, res: Response, next: NextFunctio
     return res.json({
       success: true,
       message: "Task fetched successfully",
-      data: task
+      data: serializeBigInt(task)
     });
   } catch (error) {
     next(error);
@@ -106,7 +152,7 @@ export async function createTask(req: Request, res: Response, next: NextFunction
     return res.status(201).json({
       success: true,
       message: "Task created successfully",
-      data: createdTask
+      data: serializeBigInt(createdTask)
     });
   } catch (error) {
     if (error instanceof Error && error.message.includes('Validation failed')) {
@@ -131,7 +177,7 @@ export async function updateTask(req: Request, res: Response, next: NextFunction
     return res.json({
       success: true,
       message: "Task updated successfully",
-      data: updatedTask
+      data: serializeBigInt(updatedTask)
     });
   } catch (error) {
     if (error instanceof Error) {
@@ -187,7 +233,7 @@ export async function assignTask(req: Request, res: Response, next: NextFunction
     return res.json({
       success: true,
       message: "Task assigned successfully",
-      data: task
+      data: serializeBigInt(task)
     });
   } catch (error) {
     if (error instanceof Error && error.message.includes('not found')) {
@@ -212,7 +258,7 @@ export async function unassignTask(req: Request, res: Response, next: NextFuncti
     return res.json({
       success: true,
       message: "Task unassigned successfully",
-      data: task
+      data: serializeBigInt(task)
     });
   } catch (error) {
     next(error);
@@ -234,7 +280,7 @@ export async function markTaskAsCompleted(req: Request, res: Response, next: Nex
     return res.json({
       success: true,
       message: "Task marked as completed",
-      data: task
+      data: serializeBigInt(task)
     });
   } catch (error) {
     if (error instanceof Error && error.message.includes('Cannot complete parent task')) {
@@ -258,7 +304,7 @@ export async function reopenTask(req: Request, res: Response, next: NextFunction
     return res.json({
       success: true,
       message: "Task reopened successfully",
-      data: task
+      data: serializeBigInt(task)
     });
   } catch (error) {
     next(error);
@@ -281,7 +327,7 @@ export async function escalateTask(req: Request, res: Response, next: NextFuncti
     return res.json({
       success: true,
       message: "Task escalated successfully",
-      data: task
+      data: serializeBigInt(task)
     });
   } catch (error) {
     if (error instanceof Error && 
@@ -356,7 +402,7 @@ export async function createSubtask(req: Request, res: Response, next: NextFunct
     return res.status(201).json({
       success: true,
       message: "Subtask created successfully",
-      data: createdTask
+      data: serializeBigInt(createdTask)
     });
   } catch (error) {
     if (error instanceof Error && error.message.includes('Validation failed')) {
@@ -515,6 +561,7 @@ export async function duplicateTask(req: Request, res: Response, next: NextFunct
       description: originalTask.Description,
       dueDate: (originalTask.DueDate as any).toISOString().split('T')[0],
       dueTime: originalTask.DueTime,
+      taskTypeId: originalTask.TaskTypeId || 1, // Use original task type or default to 1
       statusId: 1, // Reset to TODO
       priorityId: originalTask.PriorityId,
       isRecurring: originalTask.IsRecurring,
@@ -529,7 +576,77 @@ export async function duplicateTask(req: Request, res: Response, next: NextFunct
     return res.status(201).json({
       success: true,
       message: "Task duplicated successfully",
-      data: newTask
+      data: serializeBigInt(newTask)
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+// ============================================================================
+// TASK TYPE OPERATIONS
+// ============================================================================
+
+export async function getTaskTypes(req: Request, res: Response, next: NextFunction) {
+  try {
+    const taskTypes = await taskTypeService.getAllTaskTypes();
+
+    return res.json({
+      success: true,
+      message: "Task types fetched successfully",
+      data: serializeBigInt(taskTypes)
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function createTaskType(req: Request, res: Response, next: NextFunction) {
+  try {
+    const taskTypeData = req.body;
+    const taskType = await taskTypeService.createTaskType(taskTypeData);
+
+    return res.status(201).json({
+      success: true,
+      message: "Task type created successfully",
+      data: serializeBigInt(taskType)
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getTaskTypeById(req: Request, res: Response, next: NextFunction) {
+  try {
+    const taskTypeId = parseInt(req.params.id);
+    const taskType = await taskTypeService.getTaskTypeById(taskTypeId);
+
+    if (!taskType) {
+      return res.status(404).json({
+        success: false,
+        message: "Task type not found"
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: "Task type fetched successfully",
+      data: serializeBigInt(taskType)
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getAvailableStatusesForTaskType(req: Request, res: Response, next: NextFunction) {
+  try {
+    const taskTypeId = req.params.taskTypeId ? parseInt(req.params.taskTypeId) : undefined;
+    const statuses = await taskInit.getAvailableStatusesForTaskType(taskTypeId);
+
+    return res.json({
+      success: true,
+      message: "Available statuses fetched successfully",
+      data: statuses
     });
   } catch (error) {
     next(error);

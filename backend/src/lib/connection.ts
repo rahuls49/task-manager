@@ -1,14 +1,7 @@
-import mysql from 'mysql2/promise';
+import { PrismaClient } from '@prisma/client';
 
-const pool = mysql.createPool({
-  host: process.env.MYSQL_HOST,
-  user: process.env.MYSQL_USER,
-  password: process.env.MYSQL_PASSWORD,
-  database: process.env.MYSQL_DATABASE,
-  multipleStatements: true,
-  connectionLimit: 10,
-  waitForConnections: true,
-  timezone: 'Z'
+const prisma = new PrismaClient({
+  log: ['query', 'info', 'warn', 'error'],
 });
 
-export default pool;
+export default prisma;

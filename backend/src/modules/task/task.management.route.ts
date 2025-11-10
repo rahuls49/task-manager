@@ -1,4 +1,5 @@
 import { Router } from "express";
+import verifyAuthToken from "../../middlewares/auth-middleware";
 import {
   initializeSystem,
   getTaskStatuses,
@@ -11,8 +12,7 @@ import {
   createGroup,
   getGroupMembers,
   addUserToGroup,
-  removeUserFromGroup,
-  createTaskRecurrence
+  removeUserFromGroup
 } from "./task.management.controller";
 
 const managementRouter = Router();
@@ -21,8 +21,8 @@ const managementRouter = Router();
 // SYSTEM MANAGEMENT
 // ============================================================================
 
-// Initialize task management system
-managementRouter.post('/initialize', initializeSystem);
+// Initialize task management system (allow authenticated users during initial setup)
+managementRouter.post('/initialize', verifyAuthToken, initializeSystem);
 
 // ============================================================================
 // REFERENCE DATA MANAGEMENT
@@ -68,12 +68,5 @@ managementRouter.post('/groups/:groupId/members', addUserToGroup);
 
 // Remove user from group
 managementRouter.delete('/groups/:groupId/members/:userId', removeUserFromGroup);
-
-// ============================================================================
-// RECURRENCE MANAGEMENT
-// ============================================================================
-
-// Create task recurrence pattern
-managementRouter.post('/recurrence', createTaskRecurrence);
 
 export default managementRouter;
