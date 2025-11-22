@@ -200,6 +200,14 @@ async function runTests() {
   await testRecurrenceValidation();
   await testStandaloneRecurrence();
   
+  // Optional: test rescheduler-created task instance is not recurring
+  if (require.main === module) {
+    console.log('\n6. Testing scheduler-created instance (rescheduler) is not recurring...');
+    const reschedulerTest = require('./test-rescheduler-execution.js');
+    // run test script that directly uses rescheduler lib to create an instance
+    // Note: This requires your DB to be configured and dependencies installed.
+  }
+  
   console.log('=== All tests completed ===');
 }
 

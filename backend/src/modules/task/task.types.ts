@@ -117,6 +117,8 @@ export interface Task {
   Description?: string;
   DueDate?: string;
   DueTime?: string;
+  StartDate?: string;
+  StartTime?: string;
   IsRecurring: boolean;
   RecurrenceId?: number;
   StatusId?: number;

@@ -6,7 +6,9 @@ export default function DueBanner({ task }: { task: Task }) {
     const [timeLeft, setTimeLeft] = useState<string>("");
 
     const datePart = task.DueDate?.split('T')[0];
-    const dueDateTime = new Date(`${datePart}T${task.DueTime}Z`);
+    const rawTime = task.DueTime || '00:00';
+    const timePart = rawTime.split(':').length === 2 ? `${rawTime}:00` : rawTime;
+    const dueDateTime = new Date(`${datePart}T${timePart}+05:30`);
 
     const formatTime = (ms: number) => {
         const hours = Math.floor(ms / (1000 * 60 * 60));

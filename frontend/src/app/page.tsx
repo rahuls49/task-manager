@@ -3,6 +3,8 @@ import { redirect } from "next/navigation"
 import axios from "axios"
 import { SortableTable } from "@/components/SortableTable"
 import UploadFromCSV from "./upload-from-csv"
+import { Button } from "@/components/ui/button"
+import CreateTask from "@/components/task-page/create-task"
 
 export default async function Home() {
   const session = await auth()
@@ -18,7 +20,10 @@ export default async function Home() {
 
   return (
     <div className="p-8 w-screen flex flex-col items-center justify-center">
-      <UploadFromCSV/>
+      <header className="flex justify-between gap-2 items-center mb-4 w-full">
+        <CreateTask />
+        <UploadFromCSV />
+      </header>
       <SortableTable tasks={tasks.data.data || []} userName={session.user?.name || ''} token={session.user?.token || ''} />
     </div>
   )

@@ -34,9 +34,10 @@ interface SortableTableProps {
 export function SortableTable({ tasks, userName, token }: SortableTableProps) {
   const columns: ColumnDef<Task>[] = [
     {
-      id: 'srNo',
-      header: 'Sr. No.',
-      cell: ({ row }) => row.index + 1,
+      id: 'taskId',
+      header: 'Task Id',
+      // Display Task Id (useful for quick referencing)
+      cell: ({ row }) => row.original.Id,
     },
     {
       accessorKey: 'Title',
@@ -68,6 +69,34 @@ export function SortableTable({ tasks, userName, token }: SortableTableProps) {
       },
     },
     {
+      accessorKey: 'StartDate',
+      header: ({ column }) => {
+        return (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          >
+            Start Date
+            {column.getIsSorted() === "asc" ? (
+              <ChevronUp className="ml-2 h-4 w-4" />
+            ) : column.getIsSorted() === "desc" ? (
+              <ChevronDown className="ml-2 h-4 w-4" />
+            ) : (
+              <ArrowUpDown className="ml-2 h-4 w-4" />
+            )}
+          </Button>
+        )
+      },
+      cell: ({ row }) => formatDateTime(row.original.StartDate, row.original.StartTime),
+      sortingFn: (rowA, rowB) => {
+        const aTime = rowA.original.StartTime && rowA.original.StartTime.split(':').length === 2 ? `${rowA.original.StartTime}:00` : rowA.original.StartTime
+        const bTime = rowB.original.StartTime && rowB.original.StartTime.split(':').length === 2 ? `${rowB.original.StartTime}:00` : rowB.original.StartTime
+        const aDate = rowA.original.StartDate && aTime ? new Date(`${rowA.original.StartDate.split('T')[0]}T${aTime}+05:30`) : new Date(0)
+        const bDate = rowB.original.StartDate && bTime ? new Date(`${rowB.original.StartDate.split('T')[0]}T${bTime}+05:30`) : new Date(0)
+        return aDate.getTime() - bDate.getTime()
+      },
+    },
+    {
       accessorKey: 'DueDate',
       header: ({ column }) => {
         return (
@@ -88,8 +117,10 @@ export function SortableTable({ tasks, userName, token }: SortableTableProps) {
       },
       cell: ({ row }) => formatDateTime(row.original.DueDate, row.original.DueTime),
       sortingFn: (rowA, rowB) => {
-        const aDate = rowA.original.DueDate && rowA.original.DueTime ? new Date(`${rowA.original.DueDate.split('T')[0]}T${rowA.original.DueTime}Z`) : new Date(0)
-        const bDate = rowB.original.DueDate && rowB.original.DueTime ? new Date(`${rowB.original.DueDate.split('T')[0]}T${rowB.original.DueTime}Z`) : new Date(0)
+        const aTime = rowA.original.DueTime && rowA.original.DueTime.split(':').length === 2 ? `${rowA.original.DueTime}:00` : rowA.original.DueTime
+        const bTime = rowB.original.DueTime && rowB.original.DueTime.split(':').length === 2 ? `${rowB.original.DueTime}:00` : rowB.original.DueTime
+        const aDate = rowA.original.DueDate && aTime ? new Date(`${rowA.original.DueDate.split('T')[0]}T${aTime}+05:30`) : new Date(0)
+        const bDate = rowB.original.DueDate && bTime ? new Date(`${rowB.original.DueDate.split('T')[0]}T${bTime}+05:30`) : new Date(0)
         return aDate.getTime() - bDate.getTime()
       },
     },
@@ -135,7 +166,8 @@ export function SortableTable({ tasks, userName, token }: SortableTableProps) {
       <TableBody>
         {table.getRowModel().rows?.length ? (
           table.getRowModel().rows.map((row) => {
-            const isOverdue = row.original.DueDate && row.original.DueTime ? new Date(`${row.original.DueDate.split('T')[0]}T${row.original.DueTime}Z`) < new Date() : false;
+            const time = row.original.DueTime && row.original.DueTime.split(':').length === 2 ? `${row.original.DueTime}:00` : row.original.DueTime;
+            const isOverdue = row.original.DueDate && time ? new Date(`${row.original.DueDate.split('T')[0]}T${time}+05:30`) < new Date() : false;
             return (
               <TableRow
                 key={row.id}

@@ -512,9 +512,9 @@ class RecurringTaskScheduler {
         // Create new task instance
         const [result] = await connection.query<any>(
           `INSERT INTO Tasks 
-           (ParentTaskId, Title, Description, StartDate, StartTime, DueDate, DueTime, 
-            IsRecurring, RecurrenceId, StatusId, PriorityId, IsDeleted)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, FALSE)`,
+             (ParentTaskId, Title, Description, StartDate, StartTime, DueDate, DueTime, 
+              IsRecurring, RecurrenceId, StatusId, PriorityId, IsDeleted)
+             VALUES (?, ?, ?, ?, ?, ?, ?, FALSE, NULL, ?, ?, FALSE)`,
           [
             task.ParentTaskId,
             task.Title,
@@ -523,8 +523,7 @@ class RecurringTaskScheduler {
             newStartTime,
             newDueDate,
             newDueTime,
-            task.IsRecurring,
-            task.RecurrenceId,
+              // Force new instances to not be themselves recurring or carry recurrenceId
             1, // Reset to TODO status
             task.PriorityId
           ]

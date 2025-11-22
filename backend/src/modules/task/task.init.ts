@@ -224,10 +224,18 @@ export async function createTaskPriority(priorityName: string): Promise<number> 
 }
 
 /**
- * Get all assignees
+ * Get all assignees or search by name/email
  */
-export async function getAssignees(): Promise<any[]> {
+export async function getAssignees(search?: string): Promise<any[]> {
+  const whereClause = search ? {
+    OR: [
+      { Name: { contains: search } },
+      { Email: { contains: search } }
+    ]
+  } : {};
+
   const assignees = await prisma.assignee.findMany({
+    where: whereClause,
     orderBy: { Name: 'asc' }
   });
   return assignees.map(assignee => ({

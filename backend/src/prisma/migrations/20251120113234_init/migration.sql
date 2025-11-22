@@ -1,0 +1,5 @@
+-- AlterTable
+ALTER TABLE `tasks` ADD COLUMN `CreatedBy` BIGINT UNSIGNED NULL;
+
+-- AddForeignKey
+ALTER TABLE `Tasks` ADD CONSTRAINT `Tasks_CreatedBy_fkey` FOREIGN KEY (`CreatedBy`) REFERENCES `Assignees`(`Id`) ON DELETE SET NULL ON UPDATE CASCADE;

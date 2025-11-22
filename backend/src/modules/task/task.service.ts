@@ -24,6 +24,7 @@ import {
 // import { RowDataPacket, ResultSetHeader } from 'mysql2';
 import * as recurrenceService from "./recurrence.service";
 import { recurringTaskScheduler } from "@task-manager/rescheduler-lib";
+import { istToUtc, utcToIstDate, utcToIstTime } from '../../utils/timezone';
 
 // ============================================================================
 // VALIDATION FUNCTIONS
@@ -345,9 +346,7 @@ export async function getTaskById(taskId: number): Promise<TaskResponse | null> 
   }
 
   return await enhanceTaskWithDetails(task);
-}
-
-async function enhanceTaskWithDetails(task: any): Promise<TaskResponse> {
+}async function enhanceTaskWithDetails(task: any): Promise<TaskResponse> {
   // Get assignees
   const taskAssignees = await prisma.taskAssignee.findMany({
     where: { TaskId: task.Id },
@@ -405,12 +404,14 @@ async function enhanceTaskWithDetails(task: any): Promise<TaskResponse> {
     Title: task.Title,
     Description: task.Description,
     DueDate: task.DueDate,
-    DueTime: task.DueTime,
+    DueTime: task.DueTime ? utcToIstTime(task.DueTime) : undefined,
     IsRecurring: Boolean(task.IsRecurring),
     RecurrenceId: task.RecurrenceId ? Number(task.RecurrenceId) : undefined,
     StatusId: task.StatusId ? Number(task.StatusId) : undefined,
     PriorityId: task.PriorityId ? Number(task.PriorityId) : undefined,
     TaskTypeId: task.TaskTypeId ? Number(task.TaskTypeId) : undefined,
+    StartDate: task.StartDate,
+    StartTime: task.StartTime ? utcToIstTime(task.StartTime) : undefined,
     IsEscalated: Boolean(task.IsEscalated),
     EscalationLevel: Number(task.EscalationLevel),
     EscalatedAt: task.EscalatedAt,
@@ -551,21 +552,15 @@ export async function createTask(data: CreateTaskDto, userId?: number): Promise<
     taskData.DueDate = new Date(data.dueDate); // Convert to Date object for @db.Date
   }
   if (data.dueTime !== undefined && data.dueTime !== null) {
-    // For time fields, create a Date object with today's date and the specified time
-    const timeParts = data.dueTime.split(':');
-    const timeDate = new Date();
-    timeDate.setHours(parseInt(timeParts[0]), parseInt(timeParts[1]), parseInt(timeParts[2] || '0'), 0);
-    taskData.DueTime = timeDate; // Convert to Date object for @db.Time(0)
+    // Convert IST time to UTC for storage
+    taskData.DueTime = istToUtc(data.dueDate || new Date().toISOString().split('T')[0], data.dueTime);
   }
   if (data.startDate !== undefined && data.startDate !== null) {
     taskData.StartDate = new Date(data.startDate); // Convert to Date object for @db.Date
   }
   if (data.startTime !== undefined && data.startTime !== null) {
-    // For time fields, create a Date object with today's date and the specified time
-    const timeParts = data.startTime.split(':');
-    const timeDate = new Date();
-    timeDate.setHours(parseInt(timeParts[0]), parseInt(timeParts[1]), parseInt(timeParts[2] || '0'), 0);
-    taskData.StartTime = timeDate; // Convert to Date object for @db.Time(0)
+    // Convert IST time to UTC for storage
+    taskData.StartTime = istToUtc(data.startDate || new Date().toISOString().split('T')[0], data.startTime);
   }
 
   console.log('🔍 Task data to create:', taskData);
@@ -705,10 +700,8 @@ export async function updateTask(taskId: number, data: UpdateTaskDto, userId?: n
   }
   if (data.dueTime !== undefined) {
     if (data.dueTime) {
-      const timeParts = data.dueTime.split(':');
-      const timeDate = new Date();
-      timeDate.setHours(parseInt(timeParts[0]), parseInt(timeParts[1]), parseInt(timeParts[2] || '0'), 0);
-      updateData.DueTime = timeDate;
+      // Convert IST time to UTC for storage
+      updateData.DueTime = istToUtc(data.dueDate || currentTask.DueDate || new Date().toISOString().split('T')[0], data.dueTime);
     } else {
       updateData.DueTime = null;
     }
@@ -718,15 +711,18 @@ export async function updateTask(taskId: number, data: UpdateTaskDto, userId?: n
   }
   if (data.startTime !== undefined) {
     if (data.startTime) {
-      const timeParts = data.startTime.split(':');
-      const timeDate = new Date();
-      timeDate.setHours(parseInt(timeParts[0]), parseInt(timeParts[1]), parseInt(timeParts[2] || '0'), 0);
-      updateData.StartTime = timeDate;
+      // Convert IST time to UTC for storage
+      updateData.StartTime = istToUtc(data.startDate || currentTask.StartDate || new Date().toISOString().split('T')[0], data.startTime);
     } else {
       updateData.StartTime = null;
     }
   }
+  // Update status if provided
+  if (data.statusId !== undefined) {
+    updateData.StatusId = data.statusId;
+  }
   updateData.UpdatedAt = new Date();
+  // console.log('🔍 updateData to apply:', updateData); // debug logging removed
 
   await prisma.task.update({
     where: { Id: taskId },

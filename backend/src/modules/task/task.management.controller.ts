@@ -127,7 +127,10 @@ export async function createTaskPriority(req: Request, res: Response, next: Next
 
 export async function getAssignees(req: Request, res: Response, next: NextFunction) {
   try {
-    const assignees = await taskInit.getAssignees();
+    const { search } = req.query;
+    const searchString = search ? search as string : undefined;
+
+    const assignees = await taskInit.getAssignees(searchString);
     
     return res.json({
       success: true,

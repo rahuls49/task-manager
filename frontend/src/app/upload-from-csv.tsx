@@ -44,7 +44,7 @@ export default function UploadFromCSV() {
     };
 
     return (
-        <header className="flex justify-end gap-2 items-center">
+        <div className="flex gap-2">
             <Input
                 type="file"
                 accept=".csv"
@@ -54,6 +54,6 @@ export default function UploadFromCSV() {
             <Button onClick={handleUpload} disabled={!file}>
                 Upload From CSV
             </Button>
-        </header>
+        </div>
     );
 }
