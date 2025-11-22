@@ -429,7 +429,7 @@ export async function getTaskById(taskId: number): Promise<TaskResponse | null> 
   };
 }
 
-export async function createTask(data: CreateTaskDto, userId?: number): Promise<number> {
+export async function createTask(data: CreateTaskDto, userId?: number | null): Promise<number> {
   // Validate input data
   const validation = await validateTaskData(data);
   if (!validation.isValid) {
@@ -544,8 +544,11 @@ export async function createTask(data: CreateTaskDto, userId?: number): Promise<
     StatusId: data.statusId,
     PriorityId: data.priorityId,
     ParentTaskId: data.parentTaskId,
-    CreatedBy: userId
   };
+
+  if (userId !== undefined) {
+    taskData.CreatedBy = userId;
+  }
 
   // Only add date/time fields if they have values
   if (data.dueDate !== undefined && data.dueDate !== null) {
@@ -583,7 +586,7 @@ export async function createTask(data: CreateTaskDto, userId?: number): Promise<
   await logTaskEvent({
     taskId,
     event: TASK_EVENTS.CREATED,
-    userId,
+    userId: userId === null ? undefined : userId,
     timestamp: new Date(),
     metadata: { taskData: data }
   });

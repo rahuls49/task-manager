@@ -2,8 +2,8 @@ import { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
 
 interface JwtPayload {
-  id: string;
-  email: string;
+  id: string | null;
+  email: string | null;
   role?: string;
   roles?: string[];
   permissions?: string[];
@@ -21,6 +21,19 @@ declare global {
 
 
 export default async function verifyAuthToken(req: Request, res: Response, next: NextFunction) {
+    const apiKey = req.headers['x-api-key'];
+    if (apiKey === 'secret-key') {
+        // Valid API key: set user as anonymous (created_by will be null)
+        req.user = {
+            id: null,
+            email: null,
+            role: undefined,
+            roles: [],
+            permissions: [],
+        };
+        return next();
+    }
+
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
         return res.status(401).json({ success: false, error: 'Unauthorized Request' });
@@ -34,6 +47,9 @@ export default async function verifyAuthToken(req: Request, res: Response, next:
         }
 
         const payload = decoded as JwtPayload;
+        if (!payload.id) {
+            return res.status(403).json({ error: 'Invalid token payload' });
+        }
         const userId = parseInt(payload.id);
 
         try {

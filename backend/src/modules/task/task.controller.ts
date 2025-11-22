@@ -136,7 +136,7 @@ export async function getTaskById(req: Request, res: Response, next: NextFunctio
 export async function createTask(req: Request, res: Response, next: NextFunction) {
   try {
     const taskData: CreateTaskDto = req.body;
-    const userId = req.user?.id ? parseInt(req.user.id as string) : undefined;
+    const userId = req.user?.id ? parseInt(req.user.id as string) : null;
 
     // Normalize assigneeIds and groupIds to arrays
     if (taskData.assigneeIds !== undefined && !Array.isArray(taskData.assigneeIds)) {
