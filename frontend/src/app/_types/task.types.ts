@@ -5,6 +5,8 @@ export interface Task {
     Description?: string,
     DueDate: string | null,
     DueTime: string | null,
+    StartDate: string | null,
+    StartTime: string | null,
     IsRecurring: number,
     RecurrenceId?: number,
     StatusId: number,
