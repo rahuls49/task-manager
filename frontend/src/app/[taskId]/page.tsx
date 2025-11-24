@@ -37,7 +37,7 @@ export default async function TaskPage({
     const statusData = status.data.data;
 
     return (
-        <div className="min-h-screen w-full bg-gradient-to-br from-indigo-50 via-white to-purple-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 p-6 md:p-12 flex justify-center items-start">
+        <div className="min-h-screen w-full bg-linear-to-br from-indigo-50 via-white to-purple-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 p-6 md:p-12 flex justify-center items-start">
             <div className="max-w-4xl w-full space-y-6">
                 <Link
                     href="/"

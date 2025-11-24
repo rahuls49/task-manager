@@ -8,6 +8,9 @@ import { SortableTable } from "@/components/SortableTable"
 import UploadFromCSV from "./upload-from-csv"
 import { Button } from "@/components/ui/button"
 import CreateTask from "@/components/task-page/create-task"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Loader2, AlertCircle, RefreshCw } from "lucide-react"
 
 export default function Home() {
   const { data: session, status } = useSession()
@@ -28,6 +31,7 @@ export default function Home() {
     const fetchTasks = async () => {
       try {
         setLoading(true)
+        setError(null)
         const queryParams = activeTab === 'completed' ? '?status=completed' : ''
         console.log('Fetching tasks with token:', session?.user?.token ? 'Token present' : 'No token')
         console.log('API URL:', `${process.env.NEXT_PUBLIC_API_BASE_URL}/tasks${queryParams}`)
@@ -52,60 +56,108 @@ export default function Home() {
     fetchTasks()
   }, [session, status, router, activeTab])
 
-  if (status === "loading" || loading) {
+  const handleRetry = () => {
+    setError(null)
+    setLoading(true)
+    // Trigger re-fetch by changing activeTab temporarily
+    const currentTab = activeTab
+    setActiveTab('')
+    setTimeout(() => setActiveTab(currentTab), 0)
+  }
+
+  if (status === "loading") {
     return (
-      <div className="p-8 w-screen flex flex-col items-center justify-center">
-        <div>Loading...</div>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
+        <Card className="w-full max-w-md mx-4">
+          <CardContent className="flex flex-col items-center justify-center p-8">
+            <Loader2 className="h-8 w-8 animate-spin text-blue-600 mb-4" />
+            <p className="text-lg font-medium text-gray-700 dark:text-gray-300">Loading...</p>
+          </CardContent>
+        </Card>
       </div>
     )
   }
 
   if (error) {
     return (
-      <div className="p-8 w-screen flex flex-col items-center justify-center">
-        <div className="text-red-500">Error: {error}</div>
-        <Button onClick={() => window.location.reload()} className="mt-4">
-          Retry
-        </Button>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-red-50 to-pink-100 dark:from-gray-900 dark:to-gray-800 p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <div className="mx-auto mb-4 h-12 w-12 rounded-full bg-red-100 dark:bg-red-900 flex items-center justify-center">
+              <AlertCircle className="h-6 w-6 text-red-600 dark:text-red-400" />
+            </div>
+            <CardTitle className="text-red-800 dark:text-red-200">Error Loading Tasks</CardTitle>
+          </CardHeader>
+          <CardContent className="text-center space-y-4">
+            <p className="text-red-600 dark:text-red-400">{error}</p>
+            <Button onClick={handleRetry} className="w-full">
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Try Again
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     )
   }
 
   return (
-    <div className="p-8 w-screen flex flex-col items-center justify-center">
-      <header className="flex justify-between gap-2 items-center mb-4 w-full">
-        <CreateTask />
-        <UploadFromCSV />
-      </header>
-      <div className="flex gap-2 mb-4">
-        <Button 
-          type="button"
-          variant={activeTab === 'all' ? 'default' : 'outline'} 
-          onClick={(e) => {
-            e.preventDefault();
-            setActiveTab('all');
-          }}
-        >
-          All
-        </Button>
-        <Button 
-          type="button"
-          variant={activeTab === 'completed' ? 'default' : 'outline'} 
-          onClick={(e) => {
-            e.preventDefault();
-            setActiveTab('completed');
-          }}
-        >
-          Completed
-        </Button>
-      </div>
-      {loading ? (
-        <div className="flex justify-center items-center h-64">
-          <div>Loading tasks...</div>
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
+      <div className="container mx-auto px-4 py-6 max-w-7xl">
+        {/* Header Section */}
+        <div className="mb-8">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+                Task Manager
+              </h1>
+              <p className="text-gray-600 dark:text-gray-400 mt-1">
+                Welcome back, {session?.user?.name || 'User'}! Manage your tasks efficiently.
+              </p>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <CreateTask />
+              <div className="hidden sm:block">
+                <UploadFromCSV />
+              </div>
+            </div>
+          </div>
+
+          {/* Mobile Upload Button */}
+          <div className="sm:hidden mb-4">
+            <UploadFromCSV />
+          </div>
         </div>
-      ) : (
-        <SortableTable tasks={tasks} userName={session?.user?.name || ''} token={session?.user?.token || ''} />
-      )}
+
+        {/* Main Content */}
+        <Card className="shadow-lg">
+          <CardHeader className="pb-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <CardTitle className="text-xl font-semibold">Your Tasks</CardTitle>
+              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full sm:w-auto">
+                <TabsList className="grid w-full grid-cols-2 sm:w-auto sm:grid-cols-2">
+                  <TabsTrigger value="all" className="text-sm">All Tasks</TabsTrigger>
+                  <TabsTrigger value="completed" className="text-sm">Completed</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            {loading ? (
+              <div className="flex flex-col items-center justify-center py-16">
+                <Loader2 className="h-8 w-8 animate-spin text-blue-600 mb-4" />
+                <p className="text-gray-600 dark:text-gray-400">Loading tasks...</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <SortableTable
+                  tasks={tasks}
+                  token={session?.user?.token || ''}
+                />
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   )
 }

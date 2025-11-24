@@ -61,6 +61,7 @@ const createTaskSchema = z.object({
   taskTypeId: z.string().min(1, "Task type is required"),
   priorityId: z.string().optional(),
   assigneeIds: z.array(z.number()).optional(),
+  groupIds: z.array(z.number()).optional(),
 });
 
 type CreateTaskForm = z.infer<typeof createTaskSchema>;
@@ -88,6 +89,12 @@ interface Assignee {
   Phone: string;
 }
 
+interface Group {
+  Id: number;
+  GroupName: string;
+  ParentId: number | null;
+}
+
 export default function CreateTaskModal({ open, onOpenChange, onTaskCreated }: CreateTaskModalProps) {
   const { data: session } = useSession();
   const [taskTypes, setTaskTypes] = useState<TaskType[]>([]);
@@ -95,6 +102,9 @@ export default function CreateTaskModal({ open, onOpenChange, onTaskCreated }: C
   const [assignees, setAssignees] = useState<Assignee[]>([]);
   const [assigneeSearch, setAssigneeSearch] = useState("");
   const [selectedAssignees, setSelectedAssignees] = useState<Assignee[]>([]);
+  const [groups, setGroups] = useState<Group[]>([]);
+  const [groupSearch, setGroupSearch] = useState("");
+  const [selectedGroups, setSelectedGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(false);
 
   const form = useForm<CreateTaskForm>({
@@ -123,6 +133,7 @@ export default function CreateTaskModal({ open, onOpenChange, onTaskCreated }: C
       taskTypeId: "",
       priorityId: "",
       assigneeIds: [],
+      groupIds: [],
     },
   });
 
@@ -130,7 +141,7 @@ export default function CreateTaskModal({ open, onOpenChange, onTaskCreated }: C
     const fetchOptions = async () => {
       if (!session?.user?.token) return;
       try {
-        const [taskTypesRes, prioritiesRes, assigneesRes] = await Promise.all([
+        const [taskTypesRes, prioritiesRes, assigneesRes, groupsRes] = await Promise.all([
           axios.get(`${process.env.NEXT_PUBLIC_API_BASE_URL}/system/task-types`, {
             headers: { Authorization: `Bearer ${session.user.token}` }
           }),
@@ -140,10 +151,14 @@ export default function CreateTaskModal({ open, onOpenChange, onTaskCreated }: C
           axios.get(`${process.env.NEXT_PUBLIC_API_BASE_URL}/management/assignees`, {
             headers: { Authorization: `Bearer ${session.user.token}` }
           }),
+          axios.get(`${process.env.NEXT_PUBLIC_API_BASE_URL}/management/groups`, {
+            headers: { Authorization: `Bearer ${session.user.token}` }
+          }),
         ]);
         setTaskTypes(taskTypesRes.data.data);
         setPriorities(prioritiesRes.data.data);
         setAssignees(assigneesRes.data.data);
+        setGroups(groupsRes.data.data);
       } catch (error) {
         console.error("Failed to fetch options:", error);
       }
@@ -201,6 +216,16 @@ export default function CreateTaskModal({ open, onOpenChange, onTaskCreated }: C
     setSelectedAssignees(selectedAssignees.filter(a => a.Id !== assigneeId));
   };
 
+  const addGroup = (group: Group) => {
+    if (!selectedGroups.find(g => g.Id === group.Id)) {
+      setSelectedGroups([...selectedGroups, group]);
+    }
+  };
+
+  const removeGroup = (groupId: number) => {
+    setSelectedGroups(selectedGroups.filter(g => g.Id !== groupId));
+  };
+
   const onSubmit = async (data: CreateTaskForm) => {
     if (!session?.user?.token) {
       toast.error("Not authenticated");
@@ -213,6 +238,7 @@ export default function CreateTaskModal({ open, onOpenChange, onTaskCreated }: C
         taskTypeId: parseInt(data.taskTypeId),
         priorityId: data.priorityId ? parseInt(data.priorityId) : undefined,
         assigneeIds: selectedAssignees.map(a => a.Id),
+        groupIds: selectedGroups.map(g => g.Id),
         isRecurring: data.isRecurring || false,
         recurrence: data.isRecurring && data.recurrenceType ? buildRecurrence(data) : undefined,
       };
@@ -222,6 +248,7 @@ export default function CreateTaskModal({ open, onOpenChange, onTaskCreated }: C
       toast.success("Task created successfully!");
       form.reset();
       setSelectedAssignees([]);
+      setSelectedGroups([]);
       onOpenChange(false);
       onTaskCreated?.();
     } catch (error) {
@@ -751,6 +778,53 @@ export default function CreateTaskModal({ open, onOpenChange, onTaskCreated }: C
                         size="sm"
                         variant="outline"
                         onClick={() => removeAssignee(assignee.Id)}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="space-y-2">
+              <FormLabel>Groups</FormLabel>
+              <Input
+                placeholder="Search groups by name..."
+                value={groupSearch}
+                onChange={(e) => setGroupSearch(e.target.value)}
+              />
+              {groups.length > 0 && (
+                <div className="max-h-32 overflow-y-auto border rounded p-2">
+                  {groups
+                    .filter(group => 
+                      !selectedGroups.find(sg => sg.Id === group.Id) &&
+                      group.GroupName.toLowerCase().includes(groupSearch.toLowerCase())
+                    )
+                    .map((group) => (
+                      <div
+                        key={group.Id}
+                        className="flex justify-between items-center p-1 hover:bg-gray-100 cursor-pointer"
+                        onClick={() => addGroup(group)}
+                      >
+                        <span className="text-sm">{group.GroupName}</span>
+                        <Button type="button" size="sm" variant="outline">
+                          Add
+                        </Button>
+                      </div>
+                    ))}
+                </div>
+              )}
+              {selectedGroups.length > 0 && (
+                <div className="space-y-1">
+                  <FormLabel>Selected Groups:</FormLabel>
+                  {selectedGroups.map((group) => (
+                    <div key={group.Id} className="flex justify-between items-center bg-green-50 p-2 rounded">
+                      <span>{group.GroupName}</span>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => removeGroup(group.Id)}
                       >
                         Remove
                       </Button>

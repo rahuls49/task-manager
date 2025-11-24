@@ -114,9 +114,15 @@
 
 @layer base {
   * {
+    /* Ensure consistent box-sizing so padding doesn't cause overflow */
+    box-sizing: border-box;
     @apply border-border outline-ring/50;
   }
+  html, body {
+    /* Prevent unexpected horizontal overflow from full-viewport widths */
+    max-width: 100%;
+  }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground overflow-x-hidden;
   }
 }

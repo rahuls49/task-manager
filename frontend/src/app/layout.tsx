@@ -31,7 +31,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <Providers>
-          <main className="w-screen">
+          <main className="w-full min-h-screen">
             <ToasterProvider/>
             <Navbar />
             {children}

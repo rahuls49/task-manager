@@ -12,7 +12,6 @@ import {
 import {
   Table,
   TableBody,
-  TableCaption,
   TableCell,
   TableHead,
   TableHeader,
@@ -27,11 +26,10 @@ import Link from "next/link"
 
 interface SortableTableProps {
   tasks: Task[]
-  userName: string
   token: string
 }
 
-export function SortableTable({ tasks, userName, token }: SortableTableProps) {
+export function SortableTable({ tasks, token }: SortableTableProps) {
   const columns: ColumnDef<Task>[] = [
     {
       id: 'taskId',
@@ -145,50 +143,69 @@ export function SortableTable({ tasks, userName, token }: SortableTableProps) {
   })
 
   return (
-    <Table>
-      <TableCaption>Tasks Assigned to {userName}</TableCaption>
-      <TableHeader>
-        {table.getHeaderGroups().map((headerGroup) => (
-          <TableRow key={headerGroup.id}>
-            {headerGroup.headers.map((header) => (
-              <TableHead key={header.id}>
-                {header.isPlaceholder
-                  ? null
-                  : flexRender(
-                      header.column.columnDef.header,
-                      header.getContext()
-                    )}
-              </TableHead>
-            ))}
-          </TableRow>
-        ))}
-      </TableHeader>
-      <TableBody>
-        {table.getRowModel().rows?.length ? (
-          table.getRowModel().rows.map((row) => {
-            const time = row.original.DueTime && row.original.DueTime.split(':').length === 2 ? `${row.original.DueTime}:00` : row.original.DueTime;
-            const isOverdue = row.original.DueDate && time ? new Date(`${row.original.DueDate.split('T')[0]}T${time}+05:30`) < new Date() : false;
-            return (
-              <TableRow
-                key={row.id}
-                className={isOverdue ? "bg-red-200" : ""}
+    <div className="w-full">
+      <Table>
+        {/* <TableCaption className="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-4">
+          Tasks Assigned to {userName}
+        </TableCaption> */}
+        <TableHeader>
+          {table.getHeaderGroups().map((headerGroup) => (
+            <TableRow key={headerGroup.id} className="border-b border-gray-200 dark:border-gray-700">
+              {headerGroup.headers.map((header) => (
+                <TableHead
+                  key={header.id}
+                  className="font-semibold text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-800 px-4 py-3"
+                >
+                  {header.isPlaceholder
+                    ? null
+                    : flexRender(
+                        header.column.columnDef.header,
+                        header.getContext()
+                      )}
+                </TableHead>
+              ))}
+            </TableRow>
+          ))}
+        </TableHeader>
+        <TableBody>
+          {table.getRowModel().rows?.length ? (
+            table.getRowModel().rows.map((row) => {
+              const time = row.original.DueTime && row.original.DueTime.split(':').length === 2 ? `${row.original.DueTime}:00` : row.original.DueTime;
+              const isOverdue = row.original.DueDate && time ? new Date(`${row.original.DueDate.split('T')[0]}T${time}+05:30`) < new Date() : false;
+              return (
+                <TableRow
+                  key={row.id}
+                  className={`hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors duration-150 ${
+                    isOverdue ? "bg-red-50 dark:bg-red-900/20 border-l-4 border-l-red-500" : ""
+                  }`}
+                >
+                  {row.getVisibleCells().map((cell) => (
+                    <TableCell
+                      key={cell.id}
+                      className="px-4 py-3 text-gray-900 dark:text-gray-100"
+                    >
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              )
+            })
+          ) : (
+            <TableRow>
+              <TableCell
+                colSpan={columns.length}
+                className="h-24 text-center text-gray-500 dark:text-gray-400 py-8"
               >
-                {row.getVisibleCells().map((cell) => (
-                  <TableCell key={cell.id}>
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </TableCell>
-                ))}
-              </TableRow>
-            )
-          })
-        ) : (
-          <TableRow>
-            <TableCell colSpan={columns.length} className="h-24 text-center">
-              No results.
-            </TableCell>
-          </TableRow>
-        )}
-      </TableBody>
-    </Table>
+                <div className="flex flex-col items-center justify-center space-y-2">
+                  <div className="text-4xl">📋</div>
+                  <p className="text-lg font-medium">No tasks found</p>
+                  <p className="text-sm">Create your first task to get started!</p>
+                </div>
+              </TableCell>
+            </TableRow>
+          )}
+        </TableBody>
+      </Table>
+    </div>
   )
 }
