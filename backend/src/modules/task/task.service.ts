@@ -1,21 +1,21 @@
 import prisma from "../../lib/connection";
 import { getStatusesForTaskType } from "./task-type.service";
-import { 
-  EDITABLE_TASK_FIELDS, 
-  TASK_STATUS, 
-  TASK_PRIORITY, 
-  SQL_QUERIES, 
-  ERROR_MESSAGES, 
+import {
+  EDITABLE_TASK_FIELDS,
+  TASK_STATUS,
+  TASK_PRIORITY,
+  SQL_QUERIES,
+  ERROR_MESSAGES,
   TASK_EVENTS,
   VALIDATION_RULES
 } from "./task.constants";
-import { 
-  CSVRow, 
-  CreateTaskDto, 
-  UpdateTaskDto, 
-  TaskFilters, 
-  TaskResponse, 
-  TaskValidationResult, 
+import {
+  CSVRow,
+  CreateTaskDto,
+  UpdateTaskDto,
+  TaskFilters,
+  TaskResponse,
+  TaskValidationResult,
   ValidationError,
   AssignTaskDto,
   TaskEventData,
@@ -76,7 +76,7 @@ export async function validateTaskData(data: CreateTaskDto | UpdateTaskDto): Pro
     const dueDate = new Date(data.dueDate);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    
+
     if (dueDate < today) {
       errors.push({
         field: 'dueDate',
@@ -191,41 +191,72 @@ async function checkCircularDependency(taskId: number, parentTaskId: number): Pr
 // CORE TASK OPERATIONS
 // ============================================================================
 
-export async function getTasks(userId: number, page: number = 1, limit: number = 50): Promise<{ tasks: TaskResponse[], total: number }> {
-  const total = await prisma.task.count({
-    where: { 
-      IsDeleted: false,
-      OR: [
-        {
-          TaskAssignees: {
-            some: {
-              AssigneeId: userId
-            }
+export async function getTasks(userId: number, page: number = 1, limit: number = 50, filters?: Partial<TaskFilters>): Promise<{ tasks: TaskResponse[], total: number }> {
+  const where: any = {
+    IsDeleted: false,
+    OR: [
+      {
+        TaskAssignees: {
+          some: {
+            AssigneeId: userId
           }
-        },
-        {
-          CreatedBy: userId
         }
-      ]
+      },
+      {
+        CreatedBy: userId
+      }
+    ]
+  };
+
+  // Apply filters
+  if (filters?.status && filters.status.length > 0) {
+    where.StatusId = { in: filters.status };
+  }
+
+  if (filters?.priority && filters.priority.length > 0) {
+    where.PriorityId = { in: filters.priority };
+  }
+
+  if (filters?.assigneeId) {
+    where.TaskAssignees = {
+      some: { AssigneeId: filters.assigneeId }
+    };
+  }
+
+  if (filters?.groupId) {
+    where.TaskAssignees = {
+      some: { GroupId: filters.groupId }
+    };
+  }
+
+  if (filters?.completed !== undefined) {
+    if (filters.completed) {
+      where.StatusId = TASK_STATUS.COMPLETED;
+    } else {
+      where.StatusId = { not: TASK_STATUS.COMPLETED };
     }
-  });
-  
+  }
+
+  if (filters?.parentTaskId !== undefined) {
+    if (filters.parentTaskId === null) {
+      where.ParentTaskId = null;
+    } else {
+      where.ParentTaskId = filters.parentTaskId;
+    }
+  }
+
+  if (filters?.isSubTask !== undefined) {
+    if (filters.isSubTask) {
+      where.ParentTaskId = { not: null };
+    } else {
+      where.ParentTaskId = null;
+    }
+  }
+
+  const total = await prisma.task.count({ where });
+
   const tasks = await prisma.task.findMany({
-    where: { 
-      IsDeleted: false,
-      OR: [
-        {
-          TaskAssignees: {
-            some: {
-              AssigneeId: userId
-            }
-          }
-        },
-        {
-          CreatedBy: userId
-        }
-      ]
-    },
+    where,
     include: {
       Status: true,
       Priority: true,
@@ -302,7 +333,7 @@ export async function getTasksWithFilters(filters: TaskFilters, page: number = 1
   }
 
   const total = await prisma.task.count({ where });
-  
+
   const tasks = await prisma.task.findMany({
     where,
     include: {
@@ -328,7 +359,7 @@ export async function getTasksWithFilters(filters: TaskFilters, page: number = 1
 
 export async function getTaskById(taskId: number): Promise<TaskResponse | null> {
   const task = await prisma.task.findFirst({
-    where: { 
+    where: {
       Id: taskId,
       IsDeleted: false
     },
@@ -340,13 +371,13 @@ export async function getTaskById(taskId: number): Promise<TaskResponse | null> 
       }
     }
   });
-  
+
   if (!task) {
     return null;
   }
 
   return await enhanceTaskWithDetails(task);
-}async function enhanceTaskWithDetails(task: any): Promise<TaskResponse> {
+} async function enhanceTaskWithDetails(task: any): Promise<TaskResponse> {
   // Get assignees
   const taskAssignees = await prisma.taskAssignee.findMany({
     where: { TaskId: task.Id },
@@ -355,7 +386,7 @@ export async function getTaskById(taskId: number): Promise<TaskResponse | null> 
       Group: true
     }
   });
-  
+
   const assignees = taskAssignees.filter(ta => ta.AssigneeId).map(ta => ({
     Id: Number(ta.Assignee!.Id),
     Name: ta.Assignee!.Name,
@@ -369,7 +400,7 @@ export async function getTaskById(taskId: number): Promise<TaskResponse | null> 
 
   // Get subtasks
   const subtasksData = await prisma.task.findMany({
-    where: { 
+    where: {
       ParentTaskId: task.Id,
       IsDeleted: false
     },
@@ -388,7 +419,7 @@ export async function getTaskById(taskId: number): Promise<TaskResponse | null> 
 
   // Get recurrence details if task is recurring
   let recurrence = undefined;
-  
+
   if (task.IsRecurring && task.RecurrenceId) {
     try {
       // Get new recurrence structure
@@ -427,6 +458,45 @@ export async function getTaskById(taskId: number): Promise<TaskResponse | null> 
     priority: task.Priority ? { Id: Number(task.Priority.Id), PriorityName: task.Priority.PriorityName } : undefined,
     recurrence: recurrence || undefined
   };
+}
+
+export async function getTaskStatusHistory(taskId: number): Promise<any[]> {
+  const history = await prisma.taskStatusHistory.findMany({
+    where: {
+      TaskId: taskId
+    },
+    include: {
+      OldStatus: true,
+      NewStatus: true,
+      ChangedByUser: {
+        select: {
+          Id: true,
+          Name: true,
+          Email: true
+        }
+      }
+    },
+    orderBy: {
+      ChangedAt: 'desc'
+    }
+  });
+
+  return history.map(h => ({
+    Id: Number(h.Id),
+    TaskId: Number(h.TaskId),
+    OldStatusId: h.OldStatusId ? Number(h.OldStatusId) : null,
+    NewStatusId: Number(h.NewStatusId),
+    OldStatusName: h.OldStatus?.StatusName || null,
+    NewStatusName: h.NewStatus?.StatusName,
+    Remark: h.Remark,
+    ChangedBy: h.ChangedBy ? Number(h.ChangedBy) : null,
+    ChangedByUser: h.ChangedByUser ? {
+      Id: Number(h.ChangedByUser.Id),
+      Name: h.ChangedByUser.Name,
+      Email: h.ChangedByUser.Email
+    } : null,
+    ChangedAt: h.ChangedAt
+  }));
 }
 
 export async function createTask(data: CreateTaskDto, userId?: number | null): Promise<number> {
@@ -526,7 +596,7 @@ export async function createTask(data: CreateTaskDto, userId?: number | null): P
       orderBy: { OrderIndex: 'asc' },
       include: { Status: true }
     });
-    
+
     if (taskTypeStatuses.length > 0) {
       // For sequential types, start with the first status (lowest OrderIndex)
       // For random types, also start with the first status for consistency
@@ -694,7 +764,7 @@ export async function updateTask(taskId: number, data: UpdateTaskDto, userId?: n
 
   // Update task using Prisma
   const updateData: any = {};
-  
+
   if (data.title !== undefined) updateData.Title = data.title;
   if (data.description !== undefined) updateData.Description = data.description;
   // Convert dates to Date objects for Prisma
@@ -731,6 +801,19 @@ export async function updateTask(taskId: number, data: UpdateTaskDto, userId?: n
     where: { Id: taskId },
     data: updateData
   });
+
+  // Save status change history if status was changed
+  if (data.statusId !== undefined && data.statusId !== currentTask.StatusId) {
+    await prisma.taskStatusHistory.create({
+      data: {
+        TaskId: taskId,
+        OldStatusId: currentTask.StatusId || null,
+        NewStatusId: data.statusId,
+        Remark: data.statusRemark || null,
+        ChangedBy: userId || null
+      }
+    });
+  }
 
   // Log specific change events
   await logTaskUpdateEvents(currentTask, data, userId);
@@ -818,7 +901,7 @@ async function validateStatusTransition(taskId: number, currentStatusId: number,
       throw new Error(ERROR_MESSAGES.PARENT_INCOMPLETE_SUBTASKS);
     }
   }
-}async function logTaskUpdateEvents(currentTask: any, updates: UpdateTaskDto, userId?: number): Promise<void> {
+} async function logTaskUpdateEvents(currentTask: any, updates: UpdateTaskDto, userId?: number): Promise<void> {
   const events: TaskEventData[] = [];
 
   // Status change
@@ -927,9 +1010,9 @@ export async function deleteTask(taskId: number, userId?: number): Promise<boole
   // Soft delete - update IsDeleted flag
   const result = await prisma.task.updateMany({
     where: { Id: taskId },
-    data: { 
-      IsDeleted: true, 
-      DeletedAt: new Date() 
+    data: {
+      IsDeleted: true,
+      DeletedAt: new Date()
     }
   });
 
@@ -957,7 +1040,7 @@ export async function assignTask(taskId: number, assignData: AssignTaskDto, user
   if (!task) {
     throw new Error(ERROR_MESSAGES.TASK_NOT_FOUND);
   }
-  
+
   await assignTaskToUsers(taskId, assignData);
 
   // Log assignment event
@@ -1003,11 +1086,11 @@ async function assignTaskToUsers(taskId: number, assignData: AssignTaskDto): Pro
 
 export async function unassignTask(taskId: number, assigneeId?: number, groupId?: number, userId?: number): Promise<void> {
   const where: any = { TaskId: taskId };
-  
+
   if (assigneeId) {
     where.AssigneeId = assigneeId;
   }
-  
+
   if (groupId) {
     where.GroupId = groupId;
   }
@@ -1150,7 +1233,7 @@ async function escalateTaskByRule(taskId: number, rule: any): Promise<void> {
 
 export async function getOverdueTasks(): Promise<TaskResponse[]> {
   const { DUE_TIME_INTERVAL_VALUE, DUE_TIME_INTERVAL_UNIT } = await import('./task.constants');
-  
+
   // Get tasks that are overdue or due within the configured interval
   const rows = await prisma.$queryRaw`
     SELECT * FROM Tasks 
@@ -1158,7 +1241,7 @@ export async function getOverdueTasks(): Promise<TaskResponse[]> {
     AND StatusId != ${TASK_STATUS.COMPLETED} 
     AND CONCAT(DueDate, ' ', DueTime) <= DATE_ADD(UTC_TIMESTAMP(), INTERVAL ${DUE_TIME_INTERVAL_VALUE} ${DUE_TIME_INTERVAL_UNIT})
   ` as any[];
-  
+
   const tasks = await Promise.all(rows.map(async (task: any) => {
     return await enhanceTaskWithDetails(task);
   }));
@@ -1181,12 +1264,12 @@ export async function getDueTasks(): Promise<TaskResponse[]> {
   // Get tasks that are due within the configured time window
   // Since times are stored in UTC, we need to compare with UTC time
   const { SCHEDULER_CONFIG } = await import('./task.constants');
-  
+
   const windowValue = SCHEDULER_CONFIG.DUE_TASKS_WINDOW_VALUE;
   const windowUnit = SCHEDULER_CONFIG.DUE_TASKS_WINDOW_UNIT;
   const bufferValue = SCHEDULER_CONFIG.DUE_TASKS_BUFFER_VALUE;
   const bufferUnit = SCHEDULER_CONFIG.DUE_TASKS_BUFFER_UNIT;
-  
+
   const rows = await prisma.$queryRaw`
     SELECT * FROM Tasks 
     WHERE IsDeleted = FALSE 
@@ -1195,7 +1278,7 @@ export async function getDueTasks(): Promise<TaskResponse[]> {
         DATE_SUB(UTC_TIMESTAMP(), INTERVAL ${bufferValue} ${bufferUnit}) 
         AND DATE_ADD(UTC_TIMESTAMP(), INTERVAL ${windowValue} ${windowUnit})
   ` as any[];
-  
+
   const tasks = await Promise.all(rows.map(async (task: any) => {
     return await enhanceTaskWithDetails(task);
   }));
@@ -1207,17 +1290,17 @@ export async function getDueTasks(): Promise<TaskResponse[]> {
 
 export async function getTaskStats(): Promise<TaskStats> {
   const totalRows = await prisma.$queryRaw<{ total: number }[]>`SELECT COUNT(*) as total FROM Tasks WHERE IsDeleted = FALSE`;
-  
+
   const statusRows = await prisma.$queryRaw<{ StatusName: string; count: number }[]>`
     SELECT ts.StatusName, COUNT(*) as count FROM Tasks t JOIN TaskStatus ts ON t.StatusId = ts.Id WHERE t.IsDeleted = FALSE GROUP BY t.StatusId, ts.StatusName
   `;
-  
+
   const priorityRows = await prisma.$queryRaw<{ PriorityName: string; count: number }[]>`
     SELECT tp.PriorityName, COUNT(*) as count FROM Tasks t JOIN TaskPriority tp ON t.PriorityId = tp.Id WHERE t.IsDeleted = FALSE GROUP BY t.PriorityId, tp.PriorityName
   `;
-  
+
   const overdueRows = await prisma.$queryRaw`SELECT * FROM Tasks WHERE IsDeleted = FALSE AND StatusId != ${TASK_STATUS.COMPLETED} AND DueDate < CURDATE()` as any[];
-  
+
   const escalatedRows = await prisma.$queryRaw<{ count: number }[]>`SELECT COUNT(*) as count FROM Tasks WHERE IsDeleted = FALSE AND IsEscalated = TRUE`;
 
   const byStatus: { [key: string]: number } = {};

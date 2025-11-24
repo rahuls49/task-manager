@@ -1,26 +1,40 @@
 import { formatInTimeZone } from 'date-fns-tz';
 
 /**
- * Format a date/time pair (as returned from the backend) for display in IST.
- *
- * Parameters are intentionally generic: `dateStr` and `timeStr`. This lets
- * callers pass either `DueDate, DueTime` or `StartDate, StartTime` without
- * needing to rely on specific parameter names.
- *
- * The application backend already stores & returns times in IST; this helper
- * only formats and displays the local IST representation and does not perform
- * any timezone conversion for persistence. Internally we build an ISO-like
- * string with the IST offset (+05:30) so `formatInTimeZone` produces the
- * correct output.
+ * Helper to construct the ISO string with IST offset
  */
-export function formatDateTime(dateStr: string | null, timeStr: string | null) {
-    if (!dateStr || !timeStr) return "Not set";
-    // Backend provides time strings in IST already (e.g. from DB).
-    // Build a timestamp with the IST offset instead of using "Z" (UTC)
-    // so the Date/time functions reflect the correct instant.
+function getISTDate(dateStr: string, timeStr: string | null) {
     const datePart = dateStr.split('T')[0];
     // Ensure we have seconds: `HH:mm` -> `HH:mm:00`, `HH:mm:ss` unchanged.
-    const timePart = timeStr.split(':').length === 2 ? `${timeStr}:00` : timeStr;
-    const date = `${datePart}T${timePart}+05:30`;
-    return formatInTimeZone(date, 'Asia/Kolkata', 'PPpp')
+    const rawTime = timeStr || "00:00:00";
+    const timePart = rawTime.split(':').length === 2 ? `${rawTime}:00` : rawTime;
+    return `${datePart}T${timePart}+05:30`;
+}
+
+/**
+ * Format a date/time pair for display in IST (Full Date + Time)
+ */
+export function formatDateTime(dateStr: string | null, timeStr: string | null) {
+    if (!dateStr) return "Not set";
+    const date = getISTDate(dateStr, timeStr);
+    return formatInTimeZone(date, 'Asia/Kolkata', 'PPpp');
+}
+
+/**
+ * Format just the Date part in IST
+ */
+export function formatDate(dateStr: string | null) {
+    if (!dateStr) return "Not set";
+    // Time doesn't matter for just the date part, but we need a valid ISO string
+    const date = getISTDate(dateStr, "00:00:00");
+    return formatInTimeZone(date, 'Asia/Kolkata', 'PPP');
+}
+
+/**
+ * Format just the Time part in IST
+ */
+export function formatTime(dateStr: string | null, timeStr: string | null) {
+    if (!dateStr || !timeStr) return "Not set";
+    const date = getISTDate(dateStr, timeStr);
+    return formatInTimeZone(date, 'Asia/Kolkata', 'p');
 }

@@ -1,9 +1,11 @@
 "use client"
 import { useState, useEffect } from "react";
 import { Task } from "../_types/task.types";
+import { AlertCircle, Clock } from "lucide-react";
 
 export default function DueBanner({ task }: { task: Task }) {
     const [timeLeft, setTimeLeft] = useState<string>("");
+    const [isOverdue, setIsOverdue] = useState(false);
 
     const datePart = task.DueDate?.split('T')[0];
     const rawTime = task.DueTime || '00:00';
@@ -13,26 +15,38 @@ export default function DueBanner({ task }: { task: Task }) {
     const formatTime = (ms: number) => {
         const hours = Math.floor(ms / (1000 * 60 * 60));
         const minutes = Math.floor((ms % (1000 * 60 * 60)) / (1000 * 60));
-        const seconds = Math.floor((ms % (1000 * 60)) / 1000);
-        return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        // const seconds = Math.floor((ms % (1000 * 60)) / 1000); // Optional: remove seconds for cleaner look
+        return `${hours}h ${minutes}m`;
     };
 
     useEffect(() => {
-        const interval = setInterval(() => {
+        const updateTime = () => {
             const now = new Date();
             const diff = dueDateTime.getTime() - now.getTime();
             if (diff <= 0) {
-                setTimeLeft("Task Overdue Please take immediate action");
+                setTimeLeft("Overdue");
+                setIsOverdue(true);
             } else {
-                setTimeLeft(`Task due in ${formatTime(diff)}`);
+                setTimeLeft(`${formatTime(diff)} remaining`);
+                setIsOverdue(false);
             }
-        }, 1000);
+        };
+
+        updateTime();
+        const interval = setInterval(updateTime, 60000); // Update every minute
         return () => clearInterval(interval);
     }, [dueDateTime]);
 
     return (
-        <section className={`p-4 rounded-lg text-center font-semibold mb-10 ${timeLeft.includes("Overdue") ? "bg-red-500 text-white" : "bg-yellow-200 text-black"}`}>
+        <div className={`
+            inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-colors duration-300
+            ${isOverdue
+                ? "bg-red-100 text-red-700 border border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800"
+                : "bg-amber-100 text-amber-700 border border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800"
+            }
+        `}>
+            {isOverdue ? <AlertCircle className="w-4 h-4" /> : <Clock className="w-4 h-4" />}
             {timeLeft}
-        </section>
+        </div>
     );
 }

@@ -5,6 +5,7 @@ import {
   createTask, 
   getTasks, 
   getTaskById, 
+  getTaskStatusHistory,
   updateTask, 
   deleteTask, 
   importFromCsv,
@@ -56,6 +57,9 @@ taskRouter.post('/list', listTasks);
 
 // Get single task by ID
 taskRouter.get('/:id', getTaskById);
+
+// Get task status history
+taskRouter.get('/:id/status-history', getTaskStatusHistory);
 
 // Create new task
 taskRouter.post('/', verifyAuthToken, createTask);

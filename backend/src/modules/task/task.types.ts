@@ -160,14 +160,14 @@ export interface EscalationHistory {
 export interface CreateRecurrenceDto {
   recurrenceType: 'DAILY' | 'WEEKLY' | 'MONTHLY';
   endDate?: string;
-  
+
   // For DAILY recurrence
   dailyRule?: {
     recurEveryXDays: number;
     intraDayFrequencyType?: 'MINUTES' | 'HOURS';
     intraDayInterval?: number;
   };
-  
+
   // For WEEKLY recurrence
   weeklyRule?: {
     recurEveryNWeeks: number;
@@ -181,15 +181,15 @@ export interface CreateRecurrenceDto {
       saturday?: boolean;
     };
   };
-  
+
   // For MONTHLY recurrence
   monthlyRule?: {
     ruleType: 'BY_DAY_OF_MONTH' | 'BY_ORDINAL_DAY_OF_WEEK';
     months?: number[]; // 1-12, if empty applies to all months
-    
+
     // For BY_DAY_OF_MONTH
     dayNumbers?: string[]; // e.g., ['1', '15', 'L']
-    
+
     // For BY_ORDINAL_DAY_OF_WEEK
     ordinals?: Array<{
       ordinal: 'FIRST' | 'SECOND' | 'THIRD' | 'FOURTH' | 'LAST';
@@ -225,6 +225,7 @@ export interface UpdateTaskDto {
   dueDate?: string;
   dueTime?: string;
   statusId?: number;
+  statusRemark?: string; // Remark for status change
   priorityId?: number;
   taskTypeId?: number;
   isRecurring?: boolean;
@@ -249,7 +250,7 @@ export interface TaskFilters {
 }
 
 // Task Events
-export type TaskEvent = 
+export type TaskEvent =
   | 'task_created'
   | 'task_updated'
   | 'task_deleted'
@@ -303,7 +304,7 @@ export interface RecurrenceResponse {
   Id: number;
   RecurrenceType: 'DAILY' | 'WEEKLY' | 'MONTHLY';
   EndDate?: string;
-  
+
   dailyRule?: DailyRule;
   weeklyRule?: WeeklyRule;
   monthlyRule?: MonthlyRule & {

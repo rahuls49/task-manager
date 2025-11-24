@@ -162,32 +162,59 @@ export async function getAvailableStatusesForTaskType(taskTypeId?: number): Prom
     }));
   }
 
-  try {
-    const taskTypeStatuses = await prisma.taskTypeStatus.findMany({
-      where: { TaskTypeId: taskTypeId },
-      include: {
-        Status: true
-      },
-      orderBy: {
-        OrderIndex: 'asc'
-      }
-    });
+  // First check if this is a sequential task type (has TaskTypeStatus records)
+  const taskTypeStatuses = await prisma.taskTypeStatus.findMany({
+    where: { TaskTypeId: taskTypeId },
+    include: {
+      Status: true
+    },
+    orderBy: {
+      OrderIndex: 'asc'
+    }
+  });
 
+  if (taskTypeStatuses.length > 0) {
+    // Sequential task type - return statuses in order
     return taskTypeStatuses.map(tts => ({
       Id: Number(tts.Status.Id),
       StatusName: tts.Status.StatusName
     }));
-  } catch (error) {
-    console.error('Error getting task type statuses:', error);
-    // Fallback to all statuses
-    const statuses = await prisma.taskStatus.findMany({
-      orderBy: { Id: 'asc' }
-    });
-    return statuses.map(status => ({
-      Id: Number(status.Id),
-      StatusName: status.StatusName
-    }));
   }
+
+  // Check if this is a random task type (has StatusTransitionRule records)
+  const transitionRules = await prisma.statusTransitionRule.findMany({
+    where: { TaskTypeId: taskTypeId },
+    include: {
+      FromStatus: true,
+      ToStatus: true
+    }
+  });
+
+  if (transitionRules.length > 0) {
+    // Random task type - collect all unique statuses from transition rules
+    const statusMap = new Map();
+
+    transitionRules.forEach(rule => {
+      statusMap.set(rule.FromStatus.Id, rule.FromStatus);
+      statusMap.set(rule.ToStatus.Id, rule.ToStatus);
+    });
+
+    return Array.from(statusMap.values())
+      .sort((a, b) => Number(a.Id) - Number(b.Id))
+      .map(status => ({
+        Id: Number(status.Id),
+        StatusName: status.StatusName
+      }));
+  }
+
+  // Fallback: return all statuses if no specific configuration found
+  const statuses = await prisma.taskStatus.findMany({
+    orderBy: { Id: 'asc' }
+  });
+  return statuses.map(status => ({
+    Id: Number(status.Id),
+    StatusName: status.StatusName
+  }));
 }
 
 /**

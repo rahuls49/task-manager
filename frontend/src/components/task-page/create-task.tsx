@@ -14,7 +14,8 @@ export default function CreateTask() {
                 onOpenChange={setModalOpen}
                 onTaskCreated={() => {
                     // Optionally refresh the task list or something
-                    window.location.reload(); // Simple refresh for now
+                    // window.location.reload(); // Removed to prevent page reload
+                    setModalOpen(false);
                 }}
             />
         </>

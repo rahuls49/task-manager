@@ -61,7 +61,18 @@ export async function getTasks(req: Request, res: Response, next: NextFunction) 
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 50;
 
-    const result = await taskService.getTasks(userId, page, limit);
+    // Parse filters from query params
+    const filters: Partial<TaskFilters> = {};
+    if (req.query.status) {
+      const status = req.query.status as string;
+      if (status === 'completed') {
+        filters.completed = true;
+      } else if (!isNaN(parseInt(status))) {
+        filters.status = [parseInt(status)];
+      }
+    }
+
+    const result = await taskService.getTasks(userId, page, limit, filters);
     
     return res.json({
       success: true,
@@ -127,6 +138,21 @@ export async function getTaskById(req: Request, res: Response, next: NextFunctio
       success: true,
       message: "Task fetched successfully",
       data: serializeBigInt(task)
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getTaskStatusHistory(req: Request, res: Response, next: NextFunction) {
+  try {
+    const taskId = parseInt(req.params.id);
+    const history = await taskService.getTaskStatusHistory(taskId);
+    
+    return res.json({
+      success: true,
+      message: "Task status history fetched successfully",
+      data: serializeBigInt(history)
     });
   } catch (error) {
     next(error);

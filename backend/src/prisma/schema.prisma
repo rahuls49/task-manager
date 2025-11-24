@@ -17,6 +17,8 @@ model TaskStatus {
   FromTransitions StatusTransitionRule[] @relation("FromStatus")
   ToTransitions   StatusTransitionRule[] @relation("ToStatus")
   TaskTypeStatuses TaskTypeStatus[]
+  OldStatusHistory TaskStatusHistory[] @relation("OldStatus")
+  NewStatusHistory TaskStatusHistory[] @relation("NewStatus")
 
   @@map("TaskStatus")
 }
@@ -79,6 +81,7 @@ model Assignee {
   CreatedTasks      Task[]             @relation("CreatedBy")
   UserRoles         UserRole[]
   AssignedRoles     UserRole[]         @relation("RoleAssignedBy")
+  TaskStatusChanges TaskStatusHistory[]
 
   @@map("Assignees")
 }
@@ -235,6 +238,7 @@ model Task {
   CreatedByUser   Assignee?         @relation("CreatedBy", fields: [CreatedBy], references: [Id])
   TaskAssignees   TaskAssignee[]
   EscalationHistory EscalationHistory[]
+  StatusHistory     TaskStatusHistory[]
 
   @@map("Tasks")
 }
@@ -251,6 +255,22 @@ model TaskAssignee {
 
   @@unique([TaskId, AssigneeId, GroupId])
   @@map("TaskAssignees")
+}
+
+model TaskStatusHistory {
+  Id           BigInt     @id @default(autoincrement()) @db.UnsignedBigInt
+  TaskId       BigInt     @db.UnsignedBigInt
+  OldStatusId  BigInt?    @db.UnsignedBigInt
+  NewStatusId  BigInt     @db.UnsignedBigInt
+  Remark       String?    @db.Text
+  ChangedBy    BigInt?    @db.UnsignedBigInt
+  ChangedAt    DateTime   @default(now()) @db.Timestamp(0)
+  Task         Task       @relation(fields: [TaskId], references: [Id], onDelete: Cascade)
+  OldStatus    TaskStatus? @relation("OldStatus", fields: [OldStatusId], references: [Id])
+  NewStatus    TaskStatus @relation("NewStatus", fields: [NewStatusId], references: [Id])
+  ChangedByUser Assignee? @relation(fields: [ChangedBy], references: [Id])
+
+  @@map("TaskStatusHistory")
 }
 
 model EscalationHistory {
