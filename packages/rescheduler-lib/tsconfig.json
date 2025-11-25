@@ -15,7 +15,11 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "moduleResolution": "node",
-    "allowSyntheticDefaultImports": true
+    "allowSyntheticDefaultImports": true,
+    "baseUrl": ".",
+    "paths": {
+      "@task-manager/event-lib": ["./src/types/event-lib"]
+    }
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]

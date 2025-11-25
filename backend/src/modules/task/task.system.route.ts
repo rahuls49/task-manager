@@ -8,7 +8,8 @@ import {
     getTaskTypes,
     createTaskType,
     getTaskTypeById,
-    getAvailableStatusesForTaskType
+    getAvailableStatusesForTaskType,
+    processEscalations
 } from "./task.controller";
 
 const taskSystemRouter = Router();
@@ -47,6 +48,9 @@ taskSystemRouter.get('/scheduler/config', getSchedulerConfig);
 
 // Update scheduler configuration
 taskSystemRouter.put('/scheduler/config', updateSchedulerConfig);
+
+// Trigger escalation sweep
+taskSystemRouter.post('/tasks/escalations/process', processEscalations);
 
 
 export default taskSystemRouter;

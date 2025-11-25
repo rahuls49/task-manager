@@ -289,6 +289,16 @@ model EscalationHistory {
   @@map("EscalationHistory")
 }
 
+model SchedulerConfig {
+  Id          BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  ConfigKey   String   @unique @db.VarChar(100)
+  ConfigValue String   @db.Text
+  Description String?  @db.VarChar(255)
+  UpdatedAt   DateTime @default(now()) @updatedAt @db.Timestamp(0)
+
+  @@map("SchedulerConfig")
+}
+
 enum RecurrenceType {
   DAILY
   WEEKLY

@@ -1,6 +1,10 @@
 import * as schedule from 'node-schedule';
 import mysql from 'mysql2/promise';
 import * as dotenv from 'dotenv';
+// Use runtime require to avoid TypeScript pulling external package source under this package's rootDir
+// @ts-ignore: intentionally require external package at runtime to avoid rootDir inclusion error
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const eventHandler: any = require('@task-manager/event-lib').default || require('@task-manager/event-lib');
 
 dotenv.config();
 
@@ -88,6 +92,7 @@ const pool = mysql.createPool({
 
 class RecurringTaskScheduler {
   private scheduledJobs: Map<number, ScheduledJob> = new Map();
+  private executingTasks: Set<number> = new Set();
 
   /**
    * Initialize scheduler - load all recurring tasks and schedule them
@@ -494,147 +499,355 @@ class RecurringTaskScheduler {
     return false;
   }
 
+  private buildOccurrenceContext(task: any) {
+    const templateAnchorStart = this.combineDateAndTime(task.StartDate, task.StartTime) ||
+      this.combineDateAndTime(task.DueDate, task.DueTime) ||
+      new Date();
+
+    const templateDue = this.combineDateAndTime(task.DueDate, task.DueTime) || templateAnchorStart;
+    const durationMs = Math.max(templateDue.getTime() - templateAnchorStart.getTime(), 0);
+    const occurrenceStart = new Date();
+
+    const startDateLabel = this.formatDateValue(occurrenceStart) || this.formatDateValue(new Date());
+    const startTimeLabel = this.formatTimeValue(occurrenceStart) || '00:00:00';
+
+    return {
+      templateAnchorStart,
+      occurrenceStart,
+      durationMs,
+      startLabel: `${startDateLabel} ${startTimeLabel}`.trim()
+    };
+  }
+
+  private async cloneTaskRecursive(
+    connection: mysql.PoolConnection,
+    templateTask: any,
+    context: {
+      templateAnchorStart: Date;
+      newAnchorStart: Date;
+      parentId: number | null;
+      defaultDurationMs: number;
+    }
+  ): Promise<number> {
+    const templateStart = this.combineDateAndTime(templateTask.StartDate, templateTask.StartTime) || context.templateAnchorStart;
+    const templateDue = this.combineDateAndTime(templateTask.DueDate, templateTask.DueTime) ||
+      new Date(templateStart.getTime() + context.defaultDurationMs);
+    const durationMs = Math.max(templateDue.getTime() - templateStart.getTime(), context.defaultDurationMs);
+    const startOffset = templateStart.getTime() - context.templateAnchorStart.getTime();
+
+    const newStart = new Date(context.newAnchorStart.getTime() + startOffset);
+    const newDue = new Date(newStart.getTime() + durationMs);
+
+    const { date: startDateValue, time: startTimeValue } = this.splitDateTime(newStart);
+    const { date: dueDateValue, time: dueTimeValue } = this.splitDateTime(newDue);
+
+    const [result] = await connection.query<any>(
+      `INSERT INTO Tasks 
+         (ParentTaskId, Title, Description, StartDate, StartTime, DueDate, DueTime, 
+          TaskTypeId, StatusId, PriorityId, IsRecurring, RecurrenceId, CreatedBy, IsEscalated, EscalationLevel, CreatedAt, UpdatedAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, FALSE, NULL, ?, FALSE, 0, UTC_TIMESTAMP(), UTC_TIMESTAMP())`,
+      [
+        context.parentId,
+        templateTask.Title,
+        templateTask.Description,
+        startDateValue,
+        startTimeValue,
+        dueDateValue,
+        dueTimeValue,
+        this.toNullableNumber(templateTask.TaskTypeId),
+        1, // Reset status to TODO for new instances
+        this.toNullableNumber(templateTask.PriorityId),
+        this.toNullableNumber(templateTask.CreatedBy)
+      ]
+    );
+
+    const newTaskId = Number(result.insertId);
+
+    await this.copyTaskAssignments(connection, Number(templateTask.Id), newTaskId);
+
+    const subtasks = await this.getSubtasks(connection, Number(templateTask.Id));
+    for (const subtask of subtasks) {
+      await this.cloneTaskRecursive(connection, subtask, {
+        templateAnchorStart: templateStart,
+        newAnchorStart: newStart,
+        parentId: newTaskId,
+        defaultDurationMs: durationMs || context.defaultDurationMs
+      });
+    }
+
+    return newTaskId;
+  }
+
+  private async getTaskRecord(connection: mysql.PoolConnection, taskId: number) {
+    const [rows] = await connection.query<any[]>(
+      `SELECT * FROM Tasks WHERE Id = ? AND IsDeleted = FALSE`,
+      [taskId]
+    );
+    return rows.length ? rows[0] : null;
+  }
+
+  private async getSubtasks(connection: mysql.PoolConnection, taskId: number) {
+    const [rows] = await connection.query<any[]>(
+      `SELECT * FROM Tasks WHERE ParentTaskId = ? AND IsDeleted = FALSE`,
+      [taskId]
+    );
+    return rows;
+  }
+
+  private async copyTaskAssignments(connection: mysql.PoolConnection, sourceTaskId: number, targetTaskId: number) {
+    const [assignments] = await connection.query<any[]>(
+      `SELECT AssigneeId, GroupId FROM TaskAssignees WHERE TaskId = ?`,
+      [sourceTaskId]
+    );
+
+    if (!assignments || assignments.length === 0) {
+      return;
+    }
+
+    for (const assignment of assignments) {
+      await connection.query(
+        `INSERT INTO TaskAssignees (TaskId, AssigneeId, GroupId, AssignedAt) VALUES (?, ?, ?, UTC_TIMESTAMP())`,
+        [
+          targetTaskId,
+          this.toNullableNumber(assignment.AssigneeId),
+          this.toNullableNumber(assignment.GroupId)
+        ]
+      );
+    }
+  }
+
+  private splitDateTime(date: Date | null): { date: string | null; time: string | null } {
+    if (!date || Number.isNaN(date.getTime())) {
+      return { date: null, time: null };
+    }
+
+    const iso = date.toISOString();
+    const [datePart, timePart] = iso.split('T');
+    return { date: datePart, time: timePart.split('.')[0] };
+  }
+
+  private combineDateAndTime(dateValue?: Date | string | null, timeValue?: Date | string | null): Date | null {
+    if (!dateValue && !timeValue) {
+      return null;
+    }
+
+    const base = dateValue ? new Date(dateValue) : new Date();
+    if (Number.isNaN(base.getTime())) {
+      return null;
+    }
+
+    if (timeValue) {
+      const timeParts = this.extractTimeParts(timeValue);
+      base.setUTCHours(timeParts.hours, timeParts.minutes, timeParts.seconds, 0);
+    } else {
+      base.setUTCHours(0, 0, 0, 0);
+    }
+
+    return base;
+  }
+
+  private extractTimeParts(value: Date | string | null) {
+    if (value instanceof Date) {
+      return {
+        hours: value.getUTCHours(),
+        minutes: value.getUTCMinutes(),
+        seconds: value.getUTCSeconds()
+      };
+    }
+
+    if (typeof value === 'string') {
+      const [h = '0', m = '0', s = '0'] = value.split(':');
+      return {
+        hours: parseInt(h, 10) || 0,
+        minutes: parseInt(m, 10) || 0,
+        seconds: parseInt(s, 10) || 0
+      };
+    }
+
+    return { hours: 0, minutes: 0, seconds: 0 };
+  }
+
+  private formatDateValue(value: Date | string | null): string | null {
+    if (!value) {
+      return null;
+    }
+
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return null;
+    }
+    return date.toISOString().split('T')[0];
+  }
+
+  private formatTimeValue(value: Date | string | null): string | null {
+    if (!value) {
+      return null;
+    }
+
+    if (typeof value === 'string') {
+      return value.length === 5 ? `${value}:00` : value;
+    }
+
+    const iso = value.toISOString().split('T')[1];
+    return iso.split('.')[0];
+  }
+
+  private toNullableNumber(value: any): number | null {
+    if (value === null || value === undefined) {
+      return null;
+    }
+    const num = Number(value);
+    return Number.isNaN(num) ? null : num;
+  }
+
+  private async emitTaskCreatedEvent(taskId: number) {
+    try {
+      const snapshot = await this.fetchTaskSnapshot(taskId);
+      if (!snapshot) {
+        return;
+      }
+
+      const payload = {
+        event: 'task_created',
+        timestamp: new Date().toISOString(),
+        triggeredBy: null,
+        data: {
+          task: snapshot,
+          change: {
+            oldValue: null,
+            newValue: null,
+            metadata: null
+          }
+        }
+      };
+
+      await eventHandler(payload, 'create-task-event');
+    } catch (error) {
+      console.error(`⚠️  Failed to emit task_created event for task ${taskId}:`, error);
+    }
+  }
+
+  private async fetchTaskSnapshot(taskId: number) {
+    const connection = await pool.getConnection();
+
+    try {
+      const [taskRows] = await connection.query<any[]>(
+        `SELECT * FROM Tasks WHERE Id = ?`,
+        [taskId]
+      );
+
+      if (!taskRows.length) {
+        return null;
+      }
+
+      const task = taskRows[0];
+
+      const [assignmentRows] = await connection.query<any[]>(
+        `SELECT 
+           ta.AssigneeId, 
+           ta.GroupId, 
+           a.Name as AssigneeName, 
+           a.Email as AssigneeEmail,
+           gm.GroupName
+         FROM TaskAssignees ta
+         LEFT JOIN Assignees a ON ta.AssigneeId = a.Id
+         LEFT JOIN GroupMaster gm ON ta.GroupId = gm.GroupId
+         WHERE ta.TaskId = ?`,
+        [taskId]
+      );
+
+      const assignees = assignmentRows
+        .filter(row => row.AssigneeId)
+        .map(row => ({
+          Id: Number(row.AssigneeId),
+          Name: row.AssigneeName,
+          Email: row.AssigneeEmail
+        }));
+
+      const groups = assignmentRows
+        .filter(row => row.GroupId)
+        .map(row => ({
+          GroupId: Number(row.GroupId),
+          GroupName: row.GroupName
+        }));
+
+      return {
+        taskId: Number(task.Id),
+        title: task.Title,
+        statusId: this.toNullableNumber(task.StatusId),
+        priorityId: this.toNullableNumber(task.PriorityId),
+        dueDate: this.formatDateValue(task.DueDate),
+        dueTime: this.formatTimeValue(task.DueTime),
+        startDate: this.formatDateValue(task.StartDate),
+        startTime: this.formatTimeValue(task.StartTime),
+        recurrenceId: this.toNullableNumber(task.RecurrenceId),
+        parentTaskId: this.toNullableNumber(task.ParentTaskId),
+        escalationLevel: this.toNullableNumber(task.EscalationLevel) || 0,
+        assignees,
+        groups
+      };
+    } finally {
+      connection.release();
+    }
+  }
+
   /**
    * Execute recurring task - create new instance
    */
   async executeRecurringTask(task: Task, recurrence: RecurrenceRule & { rule: any }) {
+    if (this.executingTasks.has(task.Id)) {
+      console.log(`⚠️  Recurring task ${task.Id} is already being processed. Skipping duplicate execution.`);
+      return;
+    }
+
+    this.executingTasks.add(task.Id);
     console.log(`⏰ Executing recurring task: ${task.Id} - ${task.Title}`);
-    
+
+    const connection = await pool.getConnection();
+
     try {
-      const connection = await pool.getConnection();
-      
-      try {
-        await connection.beginTransaction();
+      await connection.beginTransaction();
 
-        // Calculate new start and due dates based on recurrence
-        const { newStartDate, newStartTime, newDueDate, newDueTime } = this.calculateNextOccurrence(task, recurrence);
-
-        // Create new task instance
-        const [result] = await connection.query<any>(
-          `INSERT INTO Tasks 
-             (ParentTaskId, Title, Description, StartDate, StartTime, DueDate, DueTime, 
-              IsRecurring, RecurrenceId, StatusId, PriorityId, IsDeleted)
-             VALUES (?, ?, ?, ?, ?, ?, ?, FALSE, NULL, ?, ?, FALSE)`,
-          [
-            task.ParentTaskId,
-            task.Title,
-            task.Description,
-            newStartDate,
-            newStartTime,
-            newDueDate,
-            newDueTime,
-              // Force new instances to not be themselves recurring or carry recurrenceId
-            1, // Reset to TODO status
-            task.PriorityId
-          ]
-        );
-
-        const newTaskId = result.insertId;
-
-        // Copy subtasks if parent task has any
-        const [subtasks] = await connection.query<any[]>(
-          `SELECT * FROM Tasks WHERE ParentTaskId = ? AND IsDeleted = FALSE`,
-          [task.Id]
-        );
-
-        for (const subtask of subtasks) {
-          await connection.query(
-            `INSERT INTO Tasks 
-             (ParentTaskId, Title, Description, StartDate, StartTime, DueDate, DueTime, 
-              StatusId, PriorityId, IsDeleted)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, FALSE)`,
-            [
-              newTaskId,
-              subtask.Title,
-              subtask.Description,
-              newStartDate,
-              newStartTime,
-              newDueDate,
-              newDueTime,
-              1, // Reset to TODO
-              subtask.PriorityId
-            ]
-          );
-        }
-
-        // Copy task assignments
-        const [assignments] = await connection.query<any[]>(
-          `SELECT * FROM TaskAssignees WHERE TaskId = ?`,
-          [task.Id]
-        );
-
-        for (const assignment of assignments) {
-          await connection.query(
-            `INSERT INTO TaskAssignees (TaskId, AssigneeId, GroupId) VALUES (?, ?, ?)`,
-            [newTaskId, assignment.AssigneeId, assignment.GroupId]
-          );
-        }
-
-        await connection.commit();
-
-        console.log(`✅ Created new task instance: ${newTaskId} for recurring task ${task.Id}`);
-        console.log(`   Start: ${newStartDate} ${newStartTime}, Due: ${newDueDate} ${newDueTime}`);
-      } catch (error) {
+      const templateTask = await this.getTaskRecord(connection, task.Id);
+      if (!templateTask) {
+        console.warn(`⚠️  Template task ${task.Id} no longer exists. Skipping.`);
         await connection.rollback();
-        throw error;
-      } finally {
-        connection.release();
+        return;
       }
+
+      const occurrence = this.buildOccurrenceContext(templateTask);
+
+      if (this.hasRecurrenceWindowExpired(templateTask, recurrence, occurrence.occurrenceStart, occurrence.durationMs)) {
+        console.log(`⛔ Recurrence window elapsed for task ${task.Id}. No further instances will be created.`);
+        await connection.rollback();
+        return;
+      }
+
+      const parentId = this.toNullableNumber(templateTask.ParentTaskId);
+
+      const newTaskId = await this.cloneTaskRecursive(connection, templateTask, {
+        templateAnchorStart: occurrence.templateAnchorStart,
+        newAnchorStart: occurrence.occurrenceStart,
+        parentId,
+        defaultDurationMs: occurrence.durationMs
+      });
+
+      await connection.commit();
+
+      console.log(`✅ Created new task instance: ${newTaskId} for recurring task ${task.Id}`);
+      console.log(
+        `   Start: ${occurrence.startLabel} | Duration: ${Math.round(occurrence.durationMs / (1000 * 60))} minutes`
+      );
+
+      await this.emitTaskCreatedEvent(newTaskId);
     } catch (error) {
+      await connection.rollback();
       console.error(`❌ Error executing recurring task ${task.Id}:`, error);
+    } finally {
+      connection.release();
+      this.executingTasks.delete(task.Id);
     }
   }
-
-  /**
-   * Calculate next occurrence dates
-   */
-  calculateNextOccurrence(task: Task, recurrence: RecurrenceRule & { rule: any }): {
-    newStartDate: string;
-    newStartTime: string;
-    newDueDate: string;
-    newDueTime: string;
-  } {
-    const now = new Date();
-    let newStartDate: Date;
-    let newDueDate: Date;
-
-    const startDate = task.StartDate ? new Date(task.StartDate) : now;
-    const dueDate = task.DueDate ? new Date(task.DueDate) : now;
-    const duration = dueDate.getTime() - startDate.getTime();
-
-    switch (recurrence.RecurrenceType) {
-      case 'DAILY':
-        const dailyRule = recurrence.rule as DailyRule;
-        newStartDate = new Date(now);
-        newStartDate.setDate(now.getDate() + dailyRule.RecurEveryXDays);
-        break;
-
-      case 'WEEKLY':
-        const weeklyRule = recurrence.rule as WeeklyRule;
-        newStartDate = new Date(now);
-        newStartDate.setDate(now.getDate() + (7 * weeklyRule.RecurEveryNWeeks));
-        break;
-
-      case 'MONTHLY':
-        newStartDate = new Date(now);
-        newStartDate.setMonth(now.getMonth() + 1);
-        break;
-
-      default:
-        newStartDate = new Date(now);
-    }
-
-    // Calculate due date based on duration
-    newDueDate = new Date(newStartDate.getTime() + duration);
-
-    return {
-      newStartDate: newStartDate.toISOString().split('T')[0] || '',
-      newStartTime: task.StartTime || '00:00:00',
-      newDueDate: newDueDate.toISOString().split('T')[0] || '',
-      newDueTime: task.DueTime || '23:59:59'
-    };
-  }
-
   /**
    * Cancel scheduled task
    */
@@ -700,6 +913,52 @@ class RecurringTaskScheduler {
     await pool.end();
     
     console.log('✅ Scheduler shutdown complete');
+  }
+
+  private hasRecurrenceWindowExpired(
+    templateTask: Task,
+    recurrence: RecurrenceRule & { rule: any },
+    occurrenceStart: Date,
+    occurrenceDurationMs: number
+  ): boolean {
+    const boundary = this.getRecurrenceEndBoundary(templateTask, recurrence);
+    if (!boundary) {
+      return false;
+    }
+
+    if (occurrenceStart > boundary) {
+      this.cancelTask(templateTask.Id);
+      return true;
+    }
+
+    const occurrenceEnd = new Date(occurrenceStart.getTime() + occurrenceDurationMs);
+    if (occurrenceEnd > boundary) {
+      this.cancelTask(templateTask.Id);
+      return true;
+    }
+
+    return false;
+  }
+
+  private getRecurrenceEndBoundary(templateTask: Task, recurrence: RecurrenceRule & { rule: any }): Date | null {
+    if (!recurrence.EndDate) {
+      return null;
+    }
+
+    const endDate = new Date(recurrence.EndDate);
+    if (Number.isNaN(endDate.getTime())) {
+      return null;
+    }
+
+    const timeSource = templateTask.DueTime || templateTask.StartTime || null;
+    if (timeSource) {
+      const parts = this.extractTimeParts(timeSource);
+      endDate.setUTCHours(parts.hours, parts.minutes, parts.seconds, 999);
+    } else {
+      endDate.setUTCHours(23, 59, 59, 999);
+    }
+
+    return endDate;
   }
 }
 

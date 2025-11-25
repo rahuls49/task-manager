@@ -263,6 +263,7 @@ export type TaskEvent =
   | 'task_start_date_changed'
   | 'task_start_time_changed'
   | 'task_recurrence_modified'
+  | 'task_rescheduled'
   | 'task_started'
   | 'task_completed'
   | 'task_reopened'

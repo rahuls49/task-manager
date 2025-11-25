@@ -115,6 +115,7 @@ export const TASK_EVENTS = {
   START_DATE_CHANGED: 'task_start_date_changed',
   START_TIME_CHANGED: 'task_start_time_changed',
   RECURRENCE_MODIFIED: 'task_recurrence_modified',
+  RESCHEDULED: 'task_rescheduled',
   STARTED: 'task_started',
   COMPLETED: 'task_completed',
   REOPENED: 'task_reopened',

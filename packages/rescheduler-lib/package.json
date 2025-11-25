@@ -13,6 +13,7 @@
   "license": "ISC",
   "packageManager": "pnpm@10.18.1",
   "dependencies": {
+    "@task-manager/event-lib": "workspace:*",
     "node-schedule": "^2.1.1",
     "mysql2": "^3.15.2",
     "dotenv": "^17.2.3",

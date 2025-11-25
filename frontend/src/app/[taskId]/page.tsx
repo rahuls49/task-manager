@@ -8,6 +8,7 @@ import Link from "next/link"
 import { ArrowLeft, Calendar, Clock, FileText, Users } from "lucide-react"
 import { Task } from "../_types/task.types"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import EscalateButton from "./escalate-button"
 
 export default async function TaskPage({
     params,
@@ -62,7 +63,8 @@ export default async function TaskPage({
                                 </div>
                                 <StatusSection currentStatus={taskData.status} statuses={statusData} taskId={taskId} />
                             </div>
-                            <div className="md:w-auto w-full">
+                            <div className="flex flex-col gap-4 md:w-auto w-full">
+                                <EscalateButton taskId={taskId} />
                                 <DueBanner task={taskData} />
                             </div>
                         </div>

@@ -4,9 +4,9 @@ import * as recurrenceService from "./recurrence.service";
 import { CSVRow, CreateTaskDto, UpdateTaskDto, TaskFilters, AssignTaskDto, CreateRecurrenceDto } from "./task.types";
 import { Readable } from "stream";
 import csv from 'csv-parser';
-import eventHandler from "@task-manager/event-lib";
 import * as taskTypeService from "./task-type.service";
 import * as taskInit from "./task.init";
+import { getSchedulerSettings, updateSchedulerSettings, SCHEDULER_CONFIG_DESCRIPTIONS } from "./scheduler-config.service";
 
 // Helper function to convert BigInt to number and Date objects to strings in response data
 function serializeBigInt(obj: any): any {
@@ -174,7 +174,6 @@ export async function createTask(req: Request, res: Response, next: NextFunction
 
     const taskId = await taskService.createTask(taskData, userId);
     const createdTask = await taskService.getTaskById(taskId);
-    eventHandler(createdTask, "create-task-event");
     return res.status(201).json({
       success: true,
       message: "Task created successfully",
@@ -344,10 +343,10 @@ export async function reopenTask(req: Request, res: Response, next: NextFunction
 export async function escalateTask(req: Request, res: Response, next: NextFunction) {
   try {
     const taskId = parseInt(req.params.id);
-    const { notes } = req.body;
+    const { notes, assigneeIds, groupIds } = req.body;
     const userId = req.user?.id ? parseInt(req.user.id as string) : undefined;
 
-    await taskService.escalateTask(taskId, userId, notes);
+    await taskService.escalateTask(taskId, userId, notes, { assigneeIds, groupIds });
     const task = await taskService.getTaskById(taskId);
 
     return res.json({
@@ -489,18 +488,15 @@ export async function getTaskStats(req: Request, res: Response, next: NextFuncti
 
 export async function getSchedulerConfig(req: Request, res: Response, next: NextFunction) {
   try {
-    const { DUE_TIME_INTERVAL_VALUE, DUE_TIME_INTERVAL_UNIT, SCHEDULER_CONFIG } = await import('./task.constants');
-    
+    const settings = await getSchedulerSettings();
     const config = {
-      dueTimeInterval: {
-        value: DUE_TIME_INTERVAL_VALUE,
-        unit: DUE_TIME_INTERVAL_UNIT
-      },
-      schedulerConfig: SCHEDULER_CONFIG,
-      description: {
-        dueTimeInterval: "Configuration for getOverdueTasks - how far in advance to look for tasks",
-        schedulerConfig: "Configuration for the scheduler service - timing windows and cron schedule"
-      }
+      dueTimeInterval: settings.dueTimeInterval,
+      dueTasksWindow: settings.dueTasksWindow,
+      dueTasksBuffer: settings.dueTasksBuffer,
+      maxSchedulingDelayMs: settings.maxSchedulingDelayMs,
+      cronSchedule: settings.cronSchedule,
+      escalationCron: settings.escalationCron,
+      description: SCHEDULER_CONFIG_DESCRIPTIONS
     };
     
     return res.json({
@@ -522,46 +518,27 @@ export async function updateSchedulerConfig(req: Request, res: Response, next: N
       dueTasksWindowUnit,
       dueTasksBufferValue,
       dueTasksBufferUnit,
-      maxSchedulingDelayMs
+      maxSchedulingDelayMs,
+      cronSchedule,
+      escalationCron
     } = req.body;
     
-    // Update environment variables (note: requires server restart to fully take effect)
-    if (dueTimeIntervalValue !== undefined) {
-      process.env.DUE_TIME_INTERVAL_VALUE = dueTimeIntervalValue.toString();
-    }
-    if (dueTimeIntervalUnit !== undefined) {
-      process.env.DUE_TIME_INTERVAL_UNIT = dueTimeIntervalUnit;
-    }
-    if (dueTasksWindowValue !== undefined) {
-      process.env.DUE_TASKS_WINDOW_VALUE = dueTasksWindowValue.toString();
-    }
-    if (dueTasksWindowUnit !== undefined) {
-      process.env.DUE_TASKS_WINDOW_UNIT = dueTasksWindowUnit;
-    }
-    if (dueTasksBufferValue !== undefined) {
-      process.env.DUE_TASKS_BUFFER_VALUE = dueTasksBufferValue.toString();
-    }
-    if (dueTasksBufferUnit !== undefined) {
-      process.env.DUE_TASKS_BUFFER_UNIT = dueTasksBufferUnit;
-    }
-    if (maxSchedulingDelayMs !== undefined) {
-      process.env.MAX_SCHEDULING_DELAY_MS = maxSchedulingDelayMs.toString();
-    }
-    
+    const updated = await updateSchedulerSettings({
+      dueTimeIntervalValue,
+      dueTimeIntervalUnit,
+      dueTasksWindowValue,
+      dueTasksWindowUnit,
+      dueTasksBufferValue,
+      dueTasksBufferUnit,
+      maxSchedulingDelayMs,
+      cronSchedule,
+      escalationCron
+    });
+
     return res.json({
       success: true,
-      message: "Scheduler configuration updated successfully. Restart services to apply changes.",
-      data: {
-        updated: {
-          dueTimeIntervalValue: process.env.DUE_TIME_INTERVAL_VALUE,
-          dueTimeIntervalUnit: process.env.DUE_TIME_INTERVAL_UNIT,
-          dueTasksWindowValue: process.env.DUE_TASKS_WINDOW_VALUE,
-          dueTasksWindowUnit: process.env.DUE_TASKS_WINDOW_UNIT,
-          dueTasksBufferValue: process.env.DUE_TASKS_BUFFER_VALUE,
-          dueTasksBufferUnit: process.env.DUE_TASKS_BUFFER_UNIT,
-          maxSchedulingDelayMs: process.env.MAX_SCHEDULING_DELAY_MS
-        }
-      }
+      message: "Scheduler configuration updated successfully.",
+      data: updated
     });
   } catch (error) {
     next(error);

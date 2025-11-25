@@ -25,6 +25,8 @@ import {
 import * as recurrenceService from "./recurrence.service";
 import { recurringTaskScheduler } from "@task-manager/rescheduler-lib";
 import { istToUtc, utcToIstDate, utcToIstTime } from '../../utils/timezone';
+import { publishTaskEvent } from "./task.event-publisher";
+import { getSchedulerSettings } from "./scheduler-config.service";
 
 // ============================================================================
 // VALIDATION FUNCTIONS
@@ -652,6 +654,8 @@ export async function createTask(data: CreateTaskDto, userId?: number | null): P
     });
   }
 
+  const createdTask = await getTaskById(taskId);
+
   // Log task creation event
   await logTaskEvent({
     taskId,
@@ -659,14 +663,11 @@ export async function createTask(data: CreateTaskDto, userId?: number | null): P
     userId: userId === null ? undefined : userId,
     timestamp: new Date(),
     metadata: { taskData: data }
-  });
+  }, createdTask || undefined);
 
   // Schedule recurring task if applicable
-  if (data.isRecurring && recurrenceId) {
-    const createdTask = await getTaskById(taskId);
-    if (createdTask) {
-      await recurringTaskScheduler.scheduleTask(createdTask as any);
-    }
+  if (data.isRecurring && recurrenceId && createdTask) {
+    await recurringTaskScheduler.scheduleTask(createdTask as any);
   }
 
   return taskId;
@@ -815,8 +816,13 @@ export async function updateTask(taskId: number, data: UpdateTaskDto, userId?: n
     });
   }
 
+  const updatedTask = await getTaskById(taskId);
+
   // Log specific change events
-  await logTaskUpdateEvents(currentTask, data, userId);
+  await logTaskUpdateEvents(currentTask as TaskResponse, data, userId, {
+    recurrenceChanged,
+    updatedTask
+  });
 
   // Reschedule recurring task if recurrence was changed
   if (recurrenceChanged && (data.isRecurring || currentTask.IsRecurring)) {
@@ -901,11 +907,25 @@ async function validateStatusTransition(taskId: number, currentStatusId: number,
       throw new Error(ERROR_MESSAGES.PARENT_INCOMPLETE_SUBTASKS);
     }
   }
-} async function logTaskUpdateEvents(currentTask: any, updates: UpdateTaskDto, userId?: number): Promise<void> {
-  const events: TaskEventData[] = [];
+}
 
-  // Status change
-  if (updates.statusId && updates.statusId !== currentTask.StatusId) {
+async function logTaskUpdateEvents(
+  currentTask: TaskResponse,
+  updates: UpdateTaskDto,
+  userId?: number,
+  options?: { recurrenceChanged?: boolean; updatedTask?: TaskResponse | null }
+): Promise<void> {
+  const events: TaskEventData[] = [];
+  let rescheduleTriggered = false;
+
+  const statusChanged = updates.statusId !== undefined && updates.statusId !== currentTask.StatusId;
+  const priorityChanged = updates.priorityId !== undefined && updates.priorityId !== currentTask.PriorityId;
+  const dueDateChanged = updates.dueDate !== undefined && updates.dueDate !== currentTask.DueDate;
+  const dueTimeChanged = updates.dueTime !== undefined && updates.dueTime !== currentTask.DueTime;
+  const startDateChanged = updates.startDate !== undefined && updates.startDate !== currentTask.StartDate;
+  const startTimeChanged = updates.startTime !== undefined && updates.startTime !== currentTask.StartTime;
+
+  if (statusChanged && updates.statusId !== undefined) {
     events.push({
       taskId: currentTask.Id,
       event: TASK_EVENTS.STATUS_CHANGED,
@@ -915,7 +935,6 @@ async function validateStatusTransition(taskId: number, currentStatusId: number,
       timestamp: new Date()
     });
 
-    // Special status events
     if (updates.statusId === TASK_STATUS.IN_PROGRESS) {
       events.push({
         taskId: currentTask.Id,
@@ -930,7 +949,7 @@ async function validateStatusTransition(taskId: number, currentStatusId: number,
         userId,
         timestamp: new Date()
       });
-    } else if (currentTask.StatusId === TASK_STATUS.COMPLETED && updates.statusId !== TASK_STATUS.COMPLETED) {
+    } else if (currentTask.StatusId === TASK_STATUS.COMPLETED) {
       events.push({
         taskId: currentTask.Id,
         event: TASK_EVENTS.REOPENED,
@@ -940,8 +959,7 @@ async function validateStatusTransition(taskId: number, currentStatusId: number,
     }
   }
 
-  // Priority change
-  if (updates.priorityId && updates.priorityId !== currentTask.PriorityId) {
+  if (priorityChanged && updates.priorityId !== undefined) {
     events.push({
       taskId: currentTask.Id,
       event: TASK_EVENTS.PRIORITY_CHANGED,
@@ -952,8 +970,8 @@ async function validateStatusTransition(taskId: number, currentStatusId: number,
     });
   }
 
-  // Due date change
-  if (updates.dueDate && updates.dueDate !== currentTask.DueDate) {
+  if (dueDateChanged) {
+    rescheduleTriggered = true;
     events.push({
       taskId: currentTask.Id,
       event: TASK_EVENTS.DUE_DATE_CHANGED,
@@ -964,8 +982,8 @@ async function validateStatusTransition(taskId: number, currentStatusId: number,
     });
   }
 
-  // Due time change
-  if (updates.dueTime && updates.dueTime !== currentTask.DueTime) {
+  if (dueTimeChanged) {
+    rescheduleTriggered = true;
     events.push({
       taskId: currentTask.Id,
       event: TASK_EVENTS.DUE_TIME_CHANGED,
@@ -976,8 +994,7 @@ async function validateStatusTransition(taskId: number, currentStatusId: number,
     });
   }
 
-  // Start date change
-  if (updates.startDate && updates.startDate !== currentTask.StartDate) {
+  if (startDateChanged) {
     events.push({
       taskId: currentTask.Id,
       event: TASK_EVENTS.START_DATE_CHANGED,
@@ -988,8 +1005,7 @@ async function validateStatusTransition(taskId: number, currentStatusId: number,
     });
   }
 
-  // Start time change
-  if (updates.startTime && updates.startTime !== currentTask.StartTime) {
+  if (startTimeChanged) {
     events.push({
       taskId: currentTask.Id,
       event: TASK_EVENTS.START_TIME_CHANGED,
@@ -998,6 +1014,53 @@ async function validateStatusTransition(taskId: number, currentStatusId: number,
       userId,
       timestamp: new Date()
     });
+  }
+
+  if (options?.recurrenceChanged) {
+    rescheduleTriggered = true;
+    events.push({
+      taskId: currentTask.Id,
+      event: TASK_EVENTS.RECURRENCE_MODIFIED,
+      userId,
+      timestamp: new Date()
+    });
+  }
+
+  if (rescheduleTriggered) {
+    const newDueDateValue = updates.dueDate !== undefined
+      ? updates.dueDate
+      : options?.updatedTask?.DueDate ?? currentTask.DueDate ?? null;
+    const newDueTimeValue = updates.dueTime !== undefined
+      ? updates.dueTime
+      : options?.updatedTask?.DueTime ?? currentTask.DueTime ?? null;
+
+    events.push({
+      taskId: currentTask.Id,
+      event: TASK_EVENTS.RESCHEDULED,
+      userId,
+      timestamp: new Date(),
+      metadata: {
+        recurrenceChanged: !!options?.recurrenceChanged,
+        dueDate: {
+          old: currentTask.DueDate ?? null,
+          new: newDueDateValue
+        },
+        dueTime: {
+          old: currentTask.DueTime ?? null,
+          new: newDueTimeValue
+        }
+      }
+    });
+  }
+
+  if (!events.length) {
+    return;
+  }
+
+  const snapshot = options?.updatedTask ?? (await getTaskById(currentTask.Id));
+
+  for (const event of events) {
+    await logTaskEvent(event, snapshot || currentTask);
   }
 }
 
@@ -1023,7 +1086,7 @@ export async function deleteTask(taskId: number, userId?: number): Promise<boole
       event: TASK_EVENTS.DELETED,
       userId,
       timestamp: new Date()
-    });
+    }, task);
 
     return true;
   }
@@ -1043,6 +1106,8 @@ export async function assignTask(taskId: number, assignData: AssignTaskDto, user
 
   await assignTaskToUsers(taskId, assignData);
 
+  const updatedTask = await getTaskById(taskId);
+
   // Log assignment event
   await logTaskEvent({
     taskId,
@@ -1050,7 +1115,7 @@ export async function assignTask(taskId: number, assignData: AssignTaskDto, user
     userId,
     timestamp: new Date(),
     metadata: { assigneeIds: assignData.assigneeIds, groupIds: assignData.groupIds }
-  });
+  }, updatedTask || task);
 }
 
 async function assignTaskToUsers(taskId: number, assignData: AssignTaskDto): Promise<void> {
@@ -1100,13 +1165,14 @@ export async function unassignTask(taskId: number, assigneeId?: number, groupId?
   });
 
   if (result.count > 0) {
+    const updatedTask = await getTaskById(taskId);
     await logTaskEvent({
       taskId,
       event: TASK_EVENTS.UNASSIGNED,
       userId,
       timestamp: new Date(),
       metadata: { assigneeId, groupId }
-    });
+    }, updatedTask || undefined);
   }
 }
 
@@ -1114,7 +1180,7 @@ export async function unassignTask(taskId: number, assigneeId?: number, groupId?
 // TASK ESCALATION OPERATIONS
 // ============================================================================
 
-export async function escalateTask(taskId: number, userId?: number, notes?: string): Promise<void> {
+export async function escalateTask(taskId: number, userId?: number, notes?: string, assignData?: { assigneeIds?: number[], groupIds?: number[] }): Promise<void> {
   const task = await getTaskById(taskId);
   if (!task) {
     throw new Error(ERROR_MESSAGES.TASK_NOT_FOUND);
@@ -1137,6 +1203,11 @@ export async function escalateTask(taskId: number, userId?: number, notes?: stri
     }
   });
 
+  // Assign to new assignees if provided
+  if (assignData && (assignData.assigneeIds?.length || assignData.groupIds?.length)) {
+    await assignTaskToUsers(taskId, assignData);
+  }
+
   // Log escalation history
   await prisma.escalationHistory.create({
     data: {
@@ -1149,14 +1220,16 @@ export async function escalateTask(taskId: number, userId?: number, notes?: stri
     }
   });
 
+  const escalatedTask = await getTaskById(taskId);
+
   // Log escalation event
   await logTaskEvent({
     taskId,
     event: TASK_EVENTS.ESCALATED,
     userId,
     timestamp: new Date(),
-    metadata: { previousLevel: task.EscalationLevel, newLevel, notes }
-  });
+    metadata: { previousLevel: task.EscalationLevel, newLevel, notes, assignedTo: assignData }
+  }, escalatedTask || undefined);
 }
 
 export async function checkAndProcessEscalations(): Promise<void> {
@@ -1218,13 +1291,15 @@ async function escalateTaskByRule(taskId: number, rule: any): Promise<void> {
     }
   });
 
+  const escalatedTask = await getTaskById(taskId);
+
   // Log event
   await logTaskEvent({
     taskId,
     event: TASK_EVENTS.ESCALATED,
     timestamp: new Date(),
     metadata: { ruleId: rule.Id, automatic: true }
-  });
+  }, escalatedTask || undefined);
 }
 
 // ============================================================================
@@ -1232,7 +1307,9 @@ async function escalateTaskByRule(taskId: number, rule: any): Promise<void> {
 // ============================================================================
 
 export async function getOverdueTasks(): Promise<TaskResponse[]> {
-  const { DUE_TIME_INTERVAL_VALUE, DUE_TIME_INTERVAL_UNIT } = await import('./task.constants');
+  const settings = await getSchedulerSettings();
+  const DUE_TIME_INTERVAL_VALUE = settings.dueTimeInterval.value;
+  const DUE_TIME_INTERVAL_UNIT = settings.dueTimeInterval.unit;
 
   // Get tasks that are overdue or due within the configured interval
   const rows = await prisma.$queryRaw`
@@ -1252,7 +1329,7 @@ export async function getOverdueTasks(): Promise<TaskResponse[]> {
       taskId: task.Id,
       event: TASK_EVENTS.OVERDUE,
       timestamp: new Date()
-    });
+    }, task);
   }
 
   console.log(`📋 getOverdueTasks: Found ${tasks.length} task(s) overdue or due within ${DUE_TIME_INTERVAL_VALUE} ${DUE_TIME_INTERVAL_UNIT}(s)`);
@@ -1261,23 +1338,22 @@ export async function getOverdueTasks(): Promise<TaskResponse[]> {
 }
 
 export async function getDueTasks(): Promise<TaskResponse[]> {
-  // Get tasks that are due within the configured time window
-  // Since times are stored in UTC, we need to compare with UTC time
-  const { SCHEDULER_CONFIG } = await import('./task.constants');
+  const settings = await getSchedulerSettings();
+  const windowValue = settings.dueTasksWindow.value;
+  const windowUnit = settings.dueTasksWindow.unit;
+  const bufferValue = settings.dueTasksBuffer.value;
+  const bufferUnit = settings.dueTasksBuffer.unit;
 
-  const windowValue = SCHEDULER_CONFIG.DUE_TASKS_WINDOW_VALUE;
-  const windowUnit = SCHEDULER_CONFIG.DUE_TASKS_WINDOW_UNIT;
-  const bufferValue = SCHEDULER_CONFIG.DUE_TASKS_BUFFER_VALUE;
-  const bufferUnit = SCHEDULER_CONFIG.DUE_TASKS_BUFFER_UNIT;
-
-  const rows = await prisma.$queryRaw`
+  const query = `
     SELECT * FROM Tasks 
     WHERE IsDeleted = FALSE 
-    AND StatusId != ${TASK_STATUS.COMPLETED} 
+    AND StatusId != ? 
     AND CONCAT(DueDate, ' ', DueTime) BETWEEN 
-        DATE_SUB(UTC_TIMESTAMP(), INTERVAL ${bufferValue} ${bufferUnit}) 
-        AND DATE_ADD(UTC_TIMESTAMP(), INTERVAL ${windowValue} ${windowUnit})
-  ` as any[];
+        DATE_SUB(UTC_TIMESTAMP(), INTERVAL ? ${bufferUnit}) 
+        AND DATE_ADD(UTC_TIMESTAMP(), INTERVAL ? ${windowUnit})
+  `;
+
+  const rows = await prisma.$queryRawUnsafe(query, TASK_STATUS.COMPLETED, bufferValue, windowValue) as any[];
 
   const tasks = await Promise.all(rows.map(async (task: any) => {
     return await enhanceTaskWithDetails(task);
@@ -1324,12 +1400,15 @@ export async function getTaskStats(): Promise<TaskStats> {
   };
 }
 
-async function logTaskEvent(eventData: TaskEventData): Promise<void> {
-  // This would typically log to an events table or external system
+async function logTaskEvent(eventData: TaskEventData, taskSnapshot?: TaskResponse | null): Promise<void> {
   console.log('Task Event:', eventData);
-  // You could implement actual logging here:
-  // await pool.query('INSERT INTO TaskEvents (TaskId, Event, OldValue, NewValue, UserId, Timestamp, Metadata) VALUES (?, ?, ?, ?, ?, ?, ?)', 
-  //   [eventData.taskId, eventData.event, eventData.oldValue, eventData.newValue, eventData.userId, eventData.timestamp, JSON.stringify(eventData.metadata)]);
+
+  try {
+    const snapshot = taskSnapshot ?? (await getTaskById(eventData.taskId));
+    await publishTaskEvent(eventData, snapshot || undefined);
+  } catch (error) {
+    console.error('Failed to dispatch task event:', error);
+  }
 }
 
 // ============================================================================
