@@ -1,8 +1,11 @@
 [
   {
-    "endpoint": "http://localhost:3300/webhooks/task-completed",
+    "endpoint": "https://wassraipur.apps.shreeshivam.net:9006/send/message",
     "api-key": "",
     "http-method": "POST",
-    "parameters": {}
+    "parameters": {
+      "phone": "917999800869",
+      "message":"Task Ended!"
+    }
   }
 ]

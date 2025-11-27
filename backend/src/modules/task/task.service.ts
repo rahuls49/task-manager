@@ -665,6 +665,21 @@ export async function createTask(data: CreateTaskDto, userId?: number | null): P
     metadata: { taskData: data }
   }, createdTask || undefined);
 
+  // Set default EndDate for intra-day recurrence if not set
+  if (data.isRecurring && recurrenceId && data.recurrence?.recurrenceType === 'DAILY' && data.recurrence.dailyRule?.intraDayFrequencyType) {
+    const existingRecurrence = await prisma.recurrenceRule.findUnique({
+      where: { Id: recurrenceId },
+      include: { DailyRule: true }
+    });
+    if (existingRecurrence && !existingRecurrence.EndDate && existingRecurrence.DailyRule?.IntraDayFrequencyType) {
+      // Set EndDate to the task's due date for intra-day recurrence
+      await prisma.recurrenceRule.update({
+        where: { Id: recurrenceId },
+        data: { EndDate: data.dueDate ? new Date(data.dueDate) : null }
+      });
+    }
+  }
+
   // Schedule recurring task if applicable
   if (data.isRecurring && recurrenceId && createdTask) {
     await recurringTaskScheduler.scheduleTask(createdTask as any);
@@ -823,6 +838,11 @@ export async function updateTask(taskId: number, data: UpdateTaskDto, userId?: n
     recurrenceChanged,
     updatedTask
   });
+
+  // If task was marked as completed, check if it's a recurring instance and create next one
+  if (data.statusId === TASK_STATUS.COMPLETED && currentTask.StatusId !== TASK_STATUS.COMPLETED) {
+    await recurringTaskScheduler.createNextRecurringInstance(taskId);
+  }
 
   // Reschedule recurring task if recurrence was changed
   if (recurrenceChanged && (data.isRecurring || currentTask.IsRecurring)) {

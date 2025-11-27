@@ -941,24 +941,176 @@ class RecurringTaskScheduler {
   }
 
   private getRecurrenceEndBoundary(templateTask: Task, recurrence: RecurrenceRule & { rule: any }): Date | null {
-    if (!recurrence.EndDate) {
-      return null;
+    if (recurrence.EndDate) {
+      const endDate = new Date(recurrence.EndDate);
+      if (Number.isNaN(endDate.getTime())) {
+        return null;
+      }
+
+      const timeSource = templateTask.DueTime || templateTask.StartTime || null;
+      if (timeSource) {
+        const parts = this.extractTimeParts(timeSource);
+        endDate.setUTCHours(parts.hours, parts.minutes, parts.seconds, 999);
+      } else {
+        endDate.setUTCHours(23, 59, 59, 999);
+      }
+
+      return endDate;
     }
 
-    const endDate = new Date(recurrence.EndDate);
-    if (Number.isNaN(endDate.getTime())) {
-      return null;
+    // For intra-day recurrence without EndDate, default to the template task's due date/time
+    if (recurrence.RecurrenceType === 'DAILY' && recurrence.rule?.IntraDayFrequencyType) {
+      return this.combineDateAndTime(templateTask.DueDate, templateTask.DueTime) || 
+             this.combineDateAndTime(templateTask.StartDate, templateTask.StartTime);
     }
 
-    const timeSource = templateTask.DueTime || templateTask.StartTime || null;
-    if (timeSource) {
-      const parts = this.extractTimeParts(timeSource);
-      endDate.setUTCHours(parts.hours, parts.minutes, parts.seconds, 999);
-    } else {
-      endDate.setUTCHours(23, 59, 59, 999);
+    return null;
+  }
+
+  private calculateNextOccurrence(lastStart: Date, recurrence: RecurrenceRule & { rule: any }): Date {
+    const next = new Date(lastStart);
+
+    switch (recurrence.RecurrenceType) {
+      case 'DAILY':
+        const dailyRule = recurrence.rule as DailyRule;
+        if (dailyRule.IntraDayFrequencyType === 'MINUTES') {
+          next.setMinutes(next.getMinutes() + dailyRule.IntraDayInterval);
+        } else if (dailyRule.IntraDayFrequencyType === 'HOURS') {
+          next.setHours(next.getHours() + dailyRule.IntraDayInterval);
+        } else {
+          next.setDate(next.getDate() + dailyRule.RecurEveryXDays);
+        }
+        break;
+      case 'WEEKLY':
+        const weeklyRule = recurrence.rule as WeeklyRule;
+        next.setDate(next.getDate() + (weeklyRule.RecurEveryNWeeks * 7));
+        break;
+      case 'MONTHLY':
+        const monthlyRule = recurrence.rule as MonthlyRule;
+        next.setMonth(next.getMonth() + 1);
+        break;
     }
 
-    return endDate;
+    return next;
+  }
+
+  private calculateDuration(task: any): number {
+    const start = this.combineDateAndTime(task.StartDate, task.StartTime);
+    const due = this.combineDateAndTime(task.DueDate, task.DueTime);
+    if (start && due) {
+      return Math.max(due.getTime() - start.getTime(), 0);
+    }
+    return 0;
+  }
+
+  private formatDateTime(date: Date): string {
+    const dateStr = this.formatDateValue(date) || '';
+    const timeStr = this.formatTimeValue(date) || '';
+    return `${dateStr} ${timeStr}`.trim();
+  }
+
+  /**
+   * Create the next instance of a recurring task when a task instance is completed
+   */
+  async createNextRecurringInstance(completedTaskId: number) {
+    const connection = await pool.getConnection();
+
+    try {
+      await connection.beginTransaction();
+
+      // Get the completed task
+      const completedTask = await this.getTaskRecord(connection, completedTaskId);
+      if (!completedTask) {
+        console.warn(`Completed task ${completedTaskId} no longer exists. Skipping.`);
+        await connection.rollback();
+        return;
+      }
+
+      let templateTask: any;
+      let parentId: number | null = null;
+
+      // Determine the template task
+      if (completedTask.ParentTaskId) {
+        // This is an instance, get the parent as template
+        const parentTask = await this.getTaskRecord(connection, Number(completedTask.ParentTaskId));
+        if (!parentTask || !parentTask.IsRecurring || !parentTask.RecurrenceId) {
+          console.log(`Parent task ${completedTask.ParentTaskId} is not recurring or has no recurrence rule.`);
+          await connection.rollback();
+          return;
+        }
+        templateTask = parentTask;
+        parentId = Number(completedTask.ParentTaskId);
+      } else if (completedTask.IsRecurring && completedTask.RecurrenceId) {
+        // This is the base recurring task, use it as template
+        templateTask = completedTask;
+        parentId = null;
+      } else {
+        console.log(`Task ${completedTaskId} is not part of a recurring series.`);
+        await connection.rollback();
+        return;
+      }
+
+      // Get recurrence rule
+      const recurrence = await this.getRecurrenceRule(templateTask.RecurrenceId);
+      if (!recurrence) {
+        console.log(`Recurrence rule ${templateTask.RecurrenceId} not found.`);
+        await connection.rollback();
+        return;
+      }
+
+      // Calculate next occurrence start time based on the completed task's start time
+      let nextOccurrenceStart: Date;
+      if (recurrence.RecurrenceType === 'DAILY' && (recurrence.rule as DailyRule)?.IntraDayFrequencyType) {
+        // For intra-day completion-based, start from current time + interval
+        const dailyRule = recurrence.rule as DailyRule;
+        const intervalMs = dailyRule.IntraDayFrequencyType === 'MINUTES' 
+          ? dailyRule.IntraDayInterval * 60 * 1000 
+          : dailyRule.IntraDayInterval * 60 * 60 * 1000;
+        nextOccurrenceStart = new Date(Date.now() + intervalMs);
+      } else {
+        const completedTaskStart = this.combineDateAndTime(completedTask.StartDate, completedTask.StartTime);
+        if (!completedTaskStart) {
+          console.warn(`Completed task ${completedTaskId} has no valid start time. Skipping.`);
+          await connection.rollback();
+          return;
+        }
+        nextOccurrenceStart = this.calculateNextOccurrence(completedTaskStart, recurrence);
+      }
+
+      const occurrence = {
+        templateAnchorStart: this.combineDateAndTime(templateTask.StartDate, templateTask.StartTime) || nextOccurrenceStart,
+        occurrenceStart: nextOccurrenceStart,
+        durationMs: this.calculateDuration(templateTask),
+        startLabel: this.formatDateTime(nextOccurrenceStart)
+      };
+
+      if (this.hasRecurrenceWindowExpired(templateTask, recurrence, occurrence.occurrenceStart, occurrence.durationMs)) {
+        console.log(`Recurrence window elapsed for task ${templateTask.Id}. No further instances will be created.`);
+        await connection.rollback();
+        return;
+      }
+
+      const newTaskId = await this.cloneTaskRecursive(connection, templateTask, {
+        templateAnchorStart: occurrence.templateAnchorStart,
+        newAnchorStart: occurrence.occurrenceStart,
+        parentId: parentId,
+        defaultDurationMs: occurrence.durationMs
+      });
+
+      await connection.commit();
+
+      console.log(`✅ Created next recurring instance: ${newTaskId} for completed task ${completedTaskId}`);
+      console.log(
+        `   Start: ${occurrence.startLabel} | Duration: ${Math.round(occurrence.durationMs / (1000 * 60))} minutes`
+      );
+
+      await this.emitTaskCreatedEvent(newTaskId);
+    } catch (error) {
+      await connection.rollback();
+      console.error(`❌ Error creating next recurring instance for task ${completedTaskId}:`, error);
+    } finally {
+      connection.release();
+    }
   }
 }
 

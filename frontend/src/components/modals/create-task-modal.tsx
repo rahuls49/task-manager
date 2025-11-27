@@ -320,6 +320,30 @@ export default function CreateTaskModal({ open, onOpenChange, onTaskCreated }: C
             />
             <FormField
               control={form.control}
+              name="taskTypeId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Task Type</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select task type" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {taskTypes.map((type) => (
+                        <SelectItem key={type.Id} value={type.Id.toString()}>
+                          {type.TypeName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
               name="startDate"
               render={({ field }) => (
                 <FormItem>
@@ -696,30 +720,6 @@ export default function CreateTaskModal({ open, onOpenChange, onTaskCreated }: C
             )}
             <FormField
               control={form.control}
-              name="taskTypeId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Task Type</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select task type" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {taskTypes.map((type) => (
-                        <SelectItem key={type.Id} value={type.Id.toString()}>
-                          {type.TypeName}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
               name="priorityId"
               render={({ field }) => (
                 <FormItem>
@@ -796,7 +796,7 @@ export default function CreateTaskModal({ open, onOpenChange, onTaskCreated }: C
               {groups.length > 0 && (
                 <div className="max-h-32 overflow-y-auto border rounded p-2">
                   {groups
-                    .filter(group => 
+                    .filter(group =>
                       !selectedGroups.find(sg => sg.Id === group.Id) &&
                       group.GroupName.toLowerCase().includes(groupSearch.toLowerCase())
                     )

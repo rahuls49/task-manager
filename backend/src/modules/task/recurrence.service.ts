@@ -49,7 +49,7 @@ export async function createRecurrenceRule(recurrenceData: CreateRecurrenceDto):
   const recurrenceRule = await prisma.recurrenceRule.create({
     data: {
       RecurrenceType: recurrenceData.recurrenceType as any,
-      EndDate: recurrenceData.endDate,
+      EndDate: recurrenceData.endDate ? new Date(recurrenceData.endDate) : null,
       DailyRuleId: dailyRuleId,
       WeeklyRuleId: weeklyRuleId,
       MonthlyRuleId: monthlyRuleId
