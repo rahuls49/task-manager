@@ -7,7 +7,11 @@ import axios from "axios";
 import toast from "react-hot-toast";
 import { Upload, FileText } from "lucide-react";
 
-export default function UploadFromCSV() {
+interface UploadFromCSVProps {
+    onSuccess?: () => void;
+}
+
+export default function UploadFromCSV({ onSuccess }: UploadFromCSVProps) {
     const { data: session } = useSession();
     const [file, setFile] = useState<File | null>(null);
     const [isUploading, setIsUploading] = useState(false);
@@ -35,13 +39,17 @@ export default function UploadFromCSV() {
                     Authorization: `Bearer ${session?.user?.token}`,
                 },
             });
-            toast.success("CSV imported successfully", {id: loadingToast});
+            toast.success("CSV imported successfully", { id: loadingToast });
             setFile(null);
             // Reset file input
             const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
             if (fileInput) fileInput.value = '';
+
+            if (onSuccess) {
+                onSuccess();
+            }
         } catch (error) {
-            toast.error("Failed to import CSV", {id: loadingToast});
+            toast.error("Failed to import CSV", { id: loadingToast });
             console.error(error);
         } finally {
             setIsUploading(false);

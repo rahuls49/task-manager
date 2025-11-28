@@ -7,11 +7,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogHeader,
-    DialogTitle,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -20,13 +20,16 @@ import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import axios from "axios";
 import { ChevronDown } from "lucide-react";
+import { useAppDispatch } from "@/lib/hooks";
+import { updateTask } from "@/lib/features/tasks/tasksSlice";
 
 export default function StatusSwitch({ currentStatus, taskId, token, taskTypeId }: { currentStatus: Status, taskId: number, token: string, taskTypeId?: number }) {
-  const [activeStatus, setActiveStatus] = useState<Status>(currentStatus);
+  const dispatch = useAppDispatch();
   const [statuses, setStatuses] = useState<Status[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState<Status | null>(null);
   const [remark, setRemark] = useState("");
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -49,7 +52,7 @@ export default function StatusSwitch({ currentStatus, taskId, token, taskTypeId 
 
   async function handleStatusChange(statusId: number) {
     const status = statuses.find(s => s.Id === statusId);
-    if (!status || statusId === activeStatus.Id) return;
+    if (!status || statusId === currentStatus.Id) return;
 
     setSelectedStatus(status);
     setIsModalOpen(true);
@@ -68,7 +71,7 @@ export default function StatusSwitch({ currentStatus, taskId, token, taskTypeId 
           Authorization: `Bearer ${token}`
         },
       });
-      setActiveStatus(response.data.data.status);
+      dispatch(updateTask(response.data.data));
       toast.success('Status updated successfully', { id: loadingToast });
       setIsModalOpen(false);
       setRemark("");
@@ -84,8 +87,8 @@ export default function StatusSwitch({ currentStatus, taskId, token, taskTypeId 
       <DropdownMenu modal={false}>
         <DropdownMenuTrigger asChild>
           <button className="flex justify-between items-center w-full px-2">
-            {activeStatus.StatusName}
-            <ChevronDown size={10}/>
+            {currentStatus.StatusName}
+            <ChevronDown size={10} />
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent
@@ -108,7 +111,7 @@ export default function StatusSwitch({ currentStatus, taskId, token, taskTypeId 
           <DialogHeader>
             <DialogTitle>Change Task Status</DialogTitle>
             <DialogDescription>
-              Change status from &quot;{activeStatus.StatusName}&quot; to &quot;{selectedStatus?.StatusName}&quot;.
+              Change status from &quot;{currentStatus.StatusName}&quot; to &quot;{selectedStatus?.StatusName}&quot;.
               Please provide a remark for this status change.
             </DialogDescription>
           </DialogHeader>

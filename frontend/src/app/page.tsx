@@ -2,8 +2,7 @@
 
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
-import { useEffect, useState } from "react"
-import axios from "axios"
+import { useEffect, useState, useCallback } from "react"
 import { SortableTable } from "@/components/SortableTable"
 import UploadFromCSV from "./upload-from-csv"
 import { Button } from "@/components/ui/button"
@@ -11,14 +10,21 @@ import CreateTask from "@/components/task-page/create-task"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Loader2, AlertCircle, RefreshCw } from "lucide-react"
+import { useAppDispatch, useAppSelector } from "@/lib/hooks"
+import { fetchTasks } from "@/lib/features/tasks/tasksSlice"
 
 export default function Home() {
   const { data: session, status } = useSession()
   const router = useRouter()
-  const [tasks, setTasks] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const dispatch = useAppDispatch()
+  const { tasks, loading, error } = useAppSelector((state) => state.tasks)
   const [activeTab, setActiveTab] = useState('all')
+
+  const loadTasks = useCallback(() => {
+    if (session?.user?.token) {
+      dispatch(fetchTasks({ token: session.user.token, status: activeTab }))
+    }
+  }, [dispatch, session?.user?.token, activeTab])
 
   useEffect(() => {
     if (status === "loading") return
@@ -28,41 +34,11 @@ export default function Home() {
       return
     }
 
-    const fetchTasks = async () => {
-      try {
-        setLoading(true)
-        setError(null)
-        const queryParams = activeTab === 'all' ? '' : `?status=${activeTab}`
-        console.log('Fetching tasks with token:', session?.user?.token ? 'Token present' : 'No token')
-        console.log('API URL:', `${process.env.NEXT_PUBLIC_API_BASE_URL}/tasks${queryParams}`)
-        const response = await axios.get(`${process.env.NEXT_PUBLIC_API_BASE_URL}/tasks${queryParams}`, {
-          headers: {
-            Authorization: `Bearer ${session?.user?.token}`
-          }
-        })
-        console.log('Tasks response:', response.data)
-        setTasks(response.data.data || [])
-      } catch (error) {
-        console.error('Failed to fetch tasks:', error)
-        const err = error as { response?: { data?: { message?: string }, status?: number } }
-        console.error('Error response:', err.response?.data)
-        console.error('Error status:', err.response?.status)
-        setError(err.response?.data?.message || (error as Error)?.message || 'Failed to fetch tasks')
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchTasks()
-  }, [session, status, router, activeTab])
+    loadTasks()
+  }, [session, status, router, loadTasks])
 
   const handleRetry = () => {
-    setError(null)
-    setLoading(true)
-    // Trigger re-fetch by changing activeTab temporarily
-    const currentTab = activeTab
-    setActiveTab('')
-    setTimeout(() => setActiveTab(currentTab), 0)
+    loadTasks()
   }
 
   if (status === "loading") {
@@ -115,16 +91,16 @@ export default function Home() {
               </p>
             </div>
             <div className="flex flex-col sm:flex-row gap-3">
-              <CreateTask />
+              <CreateTask onTaskCreated={loadTasks} />
               <div className="hidden sm:block">
-                <UploadFromCSV />
+                <UploadFromCSV onSuccess={loadTasks} />
               </div>
             </div>
           </div>
 
           {/* Mobile Upload Button */}
           <div className="sm:hidden mb-4">
-            <UploadFromCSV />
+            <UploadFromCSV onSuccess={loadTasks} />
           </div>
         </div>
 

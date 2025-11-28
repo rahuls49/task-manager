@@ -33,6 +33,8 @@ import { RadioGroup, RadioGroupItem } from "../ui/radio-group";
 import { Button } from "../ui/button";
 import { Checkbox } from "../ui/checkbox";
 import { toast } from "react-hot-toast";
+import { useAppDispatch } from "@/lib/hooks";
+import { addTask, updateTask } from "@/lib/features/tasks/tasksSlice";
 
 const createTaskSchema = z.object({
   title: z.string().min(1, "Title is required"),
@@ -98,6 +100,7 @@ interface Group {
 
 export default function CreateTaskModal({ open, onOpenChange, onTaskCreated, task }: CreateTaskModalProps) {
   const { data: session } = useSession();
+  const dispatch = useAppDispatch();
   const [taskTypes, setTaskTypes] = useState<TaskType[]>([]);
   const [priorities, setPriorities] = useState<Priority[]>([]);
   const [assignees, setAssignees] = useState<Assignee[]>([]);
@@ -319,15 +322,17 @@ export default function CreateTaskModal({ open, onOpenChange, onTaskCreated, tas
 
       if (task) {
         // Update existing task
-        await axios.put(`${process.env.NEXT_PUBLIC_API_BASE_URL}/tasks/${task.Id}`, payload, {
+        const response = await axios.put(`${process.env.NEXT_PUBLIC_API_BASE_URL}/tasks/${task.Id}`, payload, {
           headers: { Authorization: `Bearer ${session.user.token}` }
         });
+        dispatch(updateTask(response.data.data));
         toast.success("Task updated successfully!");
       } else {
         // Create new task
-        await axios.post(`${process.env.NEXT_PUBLIC_API_BASE_URL}/tasks`, payload, {
+        const response = await axios.post(`${process.env.NEXT_PUBLIC_API_BASE_URL}/tasks`, payload, {
           headers: { Authorization: `Bearer ${session.user.token}` }
         });
+        dispatch(addTask(response.data.data));
         toast.success("Task created successfully!");
       }
 

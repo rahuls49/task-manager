@@ -4,7 +4,11 @@ import { Button } from "../ui/button";
 import CreateTaskModal from "../modals/create-task-modal";
 import { Plus } from "lucide-react";
 
-export default function CreateTask() {
+interface CreateTaskProps {
+    onTaskCreated?: () => void;
+}
+
+export default function CreateTask({ onTaskCreated }: CreateTaskProps) {
     const [modalOpen, setModalOpen] = useState(false);
 
     return (
@@ -21,8 +25,9 @@ export default function CreateTask() {
                 open={modalOpen}
                 onOpenChange={setModalOpen}
                 onTaskCreated={() => {
-                    // Optionally refresh the task list or something
-                    // window.location.reload(); // Removed to prevent page reload
+                    if (onTaskCreated) {
+                        onTaskCreated();
+                    }
                     setModalOpen(false);
                 }}
             />
