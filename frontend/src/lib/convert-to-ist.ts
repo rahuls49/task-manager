@@ -8,6 +8,7 @@ function getISTDate(dateStr: string, timeStr: string | null) {
     // Ensure we have seconds: `HH:mm` -> `HH:mm:00`, `HH:mm:ss` unchanged.
     const rawTime = timeStr || "00:00:00";
     const timePart = rawTime.split(':').length === 2 ? `${rawTime}:00` : rawTime;
+    // Construct as IST
     return `${datePart}T${timePart}+05:30`;
 }
 

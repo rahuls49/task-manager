@@ -32,7 +32,7 @@ export default function Home() {
       try {
         setLoading(true)
         setError(null)
-        const queryParams = activeTab === 'completed' ? '?status=completed' : ''
+        const queryParams = activeTab === 'all' ? '' : `?status=${activeTab}`
         console.log('Fetching tasks with token:', session?.user?.token ? 'Token present' : 'No token')
         console.log('API URL:', `${process.env.NEXT_PUBLIC_API_BASE_URL}/tasks${queryParams}`)
         const response = await axios.get(`${process.env.NEXT_PUBLIC_API_BASE_URL}/tasks${queryParams}`, {
@@ -134,9 +134,11 @@ export default function Home() {
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <CardTitle className="text-xl font-semibold">Your Tasks</CardTitle>
               <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full sm:w-auto">
-                <TabsList className="grid w-full grid-cols-2 sm:w-auto sm:grid-cols-2">
-                  <TabsTrigger value="all" className="text-sm">All Tasks</TabsTrigger>
+                <TabsList className="grid w-full grid-cols-2 sm:w-auto sm:grid-cols-4">
+                  <TabsTrigger value="all" className="text-sm">All</TabsTrigger>
+                  <TabsTrigger value="incompleted" className="text-sm">Incomplete</TabsTrigger>
                   <TabsTrigger value="completed" className="text-sm">Completed</TabsTrigger>
+                  <TabsTrigger value="escalated" className="text-sm">Escalated</TabsTrigger>
                 </TabsList>
               </Tabs>
             </div>

@@ -25,6 +25,7 @@ export const LIST_TASK_FILTER_WHITELIST = z.object({
     groupId: z.number().optional(),
     overdue: z.boolean().optional(),
     completed: z.boolean().optional(),
+    escalated: z.boolean().optional(),
     parentTaskId: z.number().optional(),
     isSubTask: z.boolean().optional()
 })

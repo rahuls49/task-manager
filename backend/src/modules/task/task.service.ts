@@ -239,6 +239,10 @@ export async function getTasks(userId: number, page: number = 1, limit: number =
     }
   }
 
+  if (filters?.escalated !== undefined) {
+    where.IsEscalated = filters.escalated;
+  }
+
   if (filters?.parentTaskId !== undefined) {
     if (filters.parentTaskId === null) {
       where.ParentTaskId = null;
@@ -819,34 +823,34 @@ export async function updateTask(taskId: number, data: UpdateTaskDto, userId?: n
   });
 
   // Save status change history if status was changed
+  // Save status change history if status was changed
   if (data.statusId !== undefined && data.statusId !== currentTask.StatusId) {
     await prisma.taskStatusHistory.create({
       data: {
         TaskId: taskId,
         OldStatusId: currentTask.StatusId || null,
         NewStatusId: data.statusId,
-        Remark: data.statusRemark || null,
-        ChangedBy: userId || null
+        Remark: data.statusRemark,
+        ChangedBy: userId,
+        ChangedAt: new Date()
       }
     });
   }
 
-  const updatedTask = await getTaskById(taskId);
-
-  // Log specific change events
-  await logTaskUpdateEvents(currentTask as TaskResponse, data, userId, {
-    recurrenceChanged,
-    updatedTask
-  });
-
-  // If task was marked as completed, check if it's a recurring instance and create next one
-  if (data.statusId === TASK_STATUS.COMPLETED && currentTask.StatusId !== TASK_STATUS.COMPLETED) {
-    await recurringTaskScheduler.createNextRecurringInstance(taskId);
+  // Update assignees if provided
+  if (data.assigneeIds || data.groupIds) {
+    await assignTaskToUsers(taskId, {
+      assigneeIds: data.assigneeIds,
+      groupIds: data.groupIds
+    });
   }
 
-  // Reschedule recurring task if recurrence was changed
-  if (recurrenceChanged && (data.isRecurring || currentTask.IsRecurring)) {
-    if (data.isRecurring) {
+  // Log update event
+  await logTaskUpdateEvents(currentTask, data, userId, { recurrenceChanged });
+
+  // Handle recurrence rescheduling if needed
+  if (recurrenceChanged || data.dueDate || data.dueTime) {
+    if (currentTask.RecurrenceId || data.recurrence) {
       await recurringTaskScheduler.rescheduleTask(taskId);
     } else {
       recurringTaskScheduler.cancelTask(taskId);
@@ -1473,3 +1477,5 @@ export async function saveCSVData(csvData: CSVRow[]): Promise<void> {
     }
   }
 }
+
+

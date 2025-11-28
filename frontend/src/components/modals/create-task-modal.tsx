@@ -70,6 +70,7 @@ interface CreateTaskModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onTaskCreated?: () => void;
+  task?: any; // Task object for editing
 }
 
 interface TaskType {
@@ -95,7 +96,7 @@ interface Group {
   ParentId: number | null;
 }
 
-export default function CreateTaskModal({ open, onOpenChange, onTaskCreated }: CreateTaskModalProps) {
+export default function CreateTaskModal({ open, onOpenChange, onTaskCreated, task }: CreateTaskModalProps) {
   const { data: session } = useSession();
   const [taskTypes, setTaskTypes] = useState<TaskType[]>([]);
   const [priorities, setPriorities] = useState<Priority[]>([]);
@@ -110,28 +111,28 @@ export default function CreateTaskModal({ open, onOpenChange, onTaskCreated }: C
   const form = useForm<CreateTaskForm>({
     resolver: zodResolver(createTaskSchema),
     defaultValues: {
-      title: "",
-      description: "",
-      startDate: "",
-      startTime: "",
-      dueDate: "",
-      dueTime: "",
-      isRecurring: false,
-      recurrenceType: "",
-      recurrenceEndDate: "",
-      dailyRecurEveryXDays: 1,
-      dailyIntraDayType: "",
-      dailyIntraDayInterval: 1,
-      weeklyRecurEveryNWeeks: 1,
-      weeklyDays: [],
-      monthlyRuleType: "",
-      monthlyDaysOfMonth: [],
-      monthlyLastDay: false,
-      monthlyOrdinal: "",
-      monthlyDayOfWeek: "",
-      monthlyMonths: [],
-      taskTypeId: "",
-      priorityId: "",
+      title: task?.Title || "",
+      description: task?.Description || "",
+      startDate: task?.StartDate ? new Date(task.StartDate).toISOString().split('T')[0] : "",
+      startTime: task?.StartTime ? task.StartTime.substring(0, 5) : "",
+      dueDate: task?.DueDate ? new Date(task.DueDate).toISOString().split('T')[0] : "",
+      dueTime: task?.DueTime ? task.DueTime.substring(0, 5) : "",
+      isRecurring: task?.IsRecurring || false,
+      recurrenceType: task?.recurrence?.RecurrenceType || "",
+      recurrenceEndDate: task?.recurrence?.EndDate ? new Date(task.recurrence.EndDate).toISOString().split('T')[0] : "",
+      dailyRecurEveryXDays: task?.recurrence?.dailyRule?.RecurEveryXDays || 1,
+      dailyIntraDayType: task?.recurrence?.dailyRule?.IntraDayFrequencyType || "",
+      dailyIntraDayInterval: task?.recurrence?.dailyRule?.IntraDayInterval || 1,
+      weeklyRecurEveryNWeeks: task?.recurrence?.weeklyRule?.RecurEveryNWeeks || 1,
+      weeklyDays: task?.recurrence?.weeklyRule ? Object.keys(task.recurrence.weeklyRule).filter(k => k.startsWith('On') && task.recurrence.weeklyRule[k]).map(k => k.replace('On', '').toLowerCase()) : [],
+      monthlyRuleType: task?.recurrence?.monthlyRule?.RuleType || "",
+      monthlyDaysOfMonth: task?.recurrence?.monthlyRule?.dayNumbers?.map((d: any) => parseInt(d.DayNumber)) || [],
+      monthlyLastDay: task?.recurrence?.monthlyRule?.dayNumbers?.some((d: any) => d.DayNumber === 'L') || false,
+      monthlyOrdinal: task?.recurrence?.monthlyRule?.ordinals?.[0]?.Ordinal || "",
+      monthlyDayOfWeek: task?.recurrence?.monthlyRule?.ordinals?.[0]?.DayOfWeek?.toLowerCase() || "",
+      monthlyMonths: task?.recurrence?.monthlyRule?.months?.map((m: any) => m.MonthNumber) || [],
+      taskTypeId: task?.TaskTypeId?.toString() || "",
+      priorityId: task?.PriorityId?.toString() || "",
       assigneeIds: [],
       groupIds: [],
     },
@@ -165,10 +166,68 @@ export default function CreateTaskModal({ open, onOpenChange, onTaskCreated }: C
     };
     if (open) {
       fetchOptions();
-      setSelectedAssignees([]);
+      if (task) {
+        setSelectedAssignees(task.assignees || []);
+        setSelectedGroups(task.groups || []);
+        form.reset({
+          title: task.Title || "",
+          description: task.Description || "",
+          startDate: task.StartDate ? new Date(task.StartDate).toISOString().split('T')[0] : "",
+          startTime: task.StartTime ? task.StartTime.substring(0, 5) : "",
+          dueDate: task.DueDate ? new Date(task.DueDate).toISOString().split('T')[0] : "",
+          dueTime: task.DueTime ? task.DueTime.substring(0, 5) : "",
+          isRecurring: task.IsRecurring || false,
+          recurrenceType: task.recurrence?.RecurrenceType || "",
+          recurrenceEndDate: task.recurrence?.EndDate ? new Date(task.recurrence.EndDate).toISOString().split('T')[0] : "",
+          dailyRecurEveryXDays: task.recurrence?.dailyRule?.RecurEveryXDays || 1,
+          dailyIntraDayType: task.recurrence?.dailyRule?.IntraDayFrequencyType || "",
+          dailyIntraDayInterval: task.recurrence?.dailyRule?.IntraDayInterval || 1,
+          weeklyRecurEveryNWeeks: task.recurrence?.weeklyRule?.RecurEveryNWeeks || 1,
+          weeklyDays: task.recurrence?.weeklyRule ? Object.keys(task.recurrence.weeklyRule).filter(k => k.startsWith('On') && task.recurrence.weeklyRule[k]).map(k => k.replace('On', '').toLowerCase()) : [],
+          monthlyRuleType: task.recurrence?.monthlyRule?.RuleType || "",
+          monthlyDaysOfMonth: task.recurrence?.monthlyRule?.dayNumbers?.map((d: any) => parseInt(d.DayNumber)) || [],
+          monthlyLastDay: task.recurrence?.monthlyRule?.dayNumbers?.some((d: any) => d.DayNumber === 'L') || false,
+          monthlyOrdinal: task.recurrence?.monthlyRule?.ordinals?.[0]?.Ordinal || "",
+          monthlyDayOfWeek: task.recurrence?.monthlyRule?.ordinals?.[0]?.DayOfWeek?.toLowerCase() || "",
+          monthlyMonths: task.recurrence?.monthlyRule?.months?.map((m: any) => m.MonthNumber) || [],
+          taskTypeId: task.TaskTypeId?.toString() || "",
+          priorityId: task.PriorityId?.toString() || "",
+          assigneeIds: [],
+          groupIds: [],
+        });
+      } else {
+        setSelectedAssignees([]);
+        setSelectedGroups([]);
+        form.reset({
+          title: "",
+          description: "",
+          startDate: "",
+          startTime: "",
+          dueDate: "",
+          dueTime: "",
+          isRecurring: false,
+          recurrenceType: "",
+          recurrenceEndDate: "",
+          dailyRecurEveryXDays: 1,
+          dailyIntraDayType: "",
+          dailyIntraDayInterval: 1,
+          weeklyRecurEveryNWeeks: 1,
+          weeklyDays: [],
+          monthlyRuleType: "",
+          monthlyDaysOfMonth: [],
+          monthlyLastDay: false,
+          monthlyOrdinal: "",
+          monthlyDayOfWeek: "",
+          monthlyMonths: [],
+          taskTypeId: "",
+          priorityId: "",
+          assigneeIds: [],
+          groupIds: [],
+        });
+      }
       setAssigneeSearch("");
     }
-  }, [open, session]);
+  }, [open, session, task, form]);
 
   const searchAssignees = async (query: string) => {
     if (!session?.user?.token) return;
@@ -233,7 +292,7 @@ export default function CreateTaskModal({ open, onOpenChange, onTaskCreated }: C
     }
     setLoading(true);
     try {
-      const payload = {
+      const payload: any = {
         ...data,
         taskTypeId: parseInt(data.taskTypeId),
         priorityId: data.priorityId ? parseInt(data.priorityId) : undefined,
@@ -242,18 +301,44 @@ export default function CreateTaskModal({ open, onOpenChange, onTaskCreated }: C
         isRecurring: data.isRecurring || false,
         recurrence: data.isRecurring && data.recurrenceType ? buildRecurrence(data) : undefined,
       };
-      await axios.post(`${process.env.NEXT_PUBLIC_API_BASE_URL}/tasks`, payload, {
-        headers: { Authorization: `Bearer ${session.user.token}` }
-      });
-      toast.success("Task created successfully!");
+
+      // Clean up empty strings
+      if (!payload.startDate) delete payload.startDate;
+      if (!payload.startTime) delete payload.startTime;
+      if (!payload.dueDate) delete payload.dueDate;
+      if (!payload.dueTime) delete payload.dueTime;
+      if (!payload.description) delete payload.description;
+      if (!payload.recurrenceEndDate) delete payload.recurrenceEndDate;
+      if (!payload.recurrenceType) delete payload.recurrenceType;
+      if (!payload.dailyIntraDayType) delete payload.dailyIntraDayType;
+      if (!payload.monthlyRuleType) delete payload.monthlyRuleType;
+      if (!payload.monthlyOrdinal) delete payload.monthlyOrdinal;
+      if (!payload.monthlyDayOfWeek) delete payload.monthlyDayOfWeek;
+      if (!payload.priorityId) delete payload.priorityId;
+
+
+      if (task) {
+        // Update existing task
+        await axios.put(`${process.env.NEXT_PUBLIC_API_BASE_URL}/tasks/${task.Id}`, payload, {
+          headers: { Authorization: `Bearer ${session.user.token}` }
+        });
+        toast.success("Task updated successfully!");
+      } else {
+        // Create new task
+        await axios.post(`${process.env.NEXT_PUBLIC_API_BASE_URL}/tasks`, payload, {
+          headers: { Authorization: `Bearer ${session.user.token}` }
+        });
+        toast.success("Task created successfully!");
+      }
+
       form.reset();
       setSelectedAssignees([]);
       setSelectedGroups([]);
       onOpenChange(false);
       onTaskCreated?.();
     } catch (error) {
-      console.error("Failed to create task:", error);
-      toast.error("Failed to create task");
+      console.error("Failed to save task:", error);
+      toast.error(task ? "Failed to update task" : "Failed to create task");
     } finally {
       setLoading(false);
     }
@@ -298,9 +383,9 @@ export default function CreateTaskModal({ open, onOpenChange, onTaskCreated }: C
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Create New Task</DialogTitle>
+          <DialogTitle>{task ? "Edit Task" : "Create New Task"}</DialogTitle>
           <DialogDescription>
-            Fill in the details to create a new task.
+            {task ? "Update the details of the task." : "Fill in the details to create a new task."}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -843,12 +928,8 @@ export default function CreateTaskModal({ open, onOpenChange, onTaskCreated }: C
                 Cancel
               </Button>
 
-              <Button
-                type="submit"
-                disabled={loading}
-                className="w-1/2"
-              >
-                {loading ? "Creating..." : "Create Task"}
+              <Button type="submit" className="w-full" disabled={loading}>
+                {loading ? (task ? "Updating..." : "Creating...") : (task ? "Update Task" : "Create Task")}
               </Button>
             </div>
 

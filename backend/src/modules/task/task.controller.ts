@@ -67,13 +67,17 @@ export async function getTasks(req: Request, res: Response, next: NextFunction) 
       const status = req.query.status as string;
       if (status === 'completed') {
         filters.completed = true;
+      } else if (status === 'incompleted') {
+        filters.completed = false;
+      } else if (status === 'escalated') {
+        filters.escalated = true;
       } else if (!isNaN(parseInt(status))) {
         filters.status = [parseInt(status)];
       }
     }
 
     const result = await taskService.getTasks(userId, page, limit, filters);
-    
+
     return res.json({
       success: true,
       message: "Tasks fetched successfully",
@@ -94,16 +98,16 @@ export async function listTasks(req: Request, res: Response, next: NextFunction)
   try {
     const page = parseInt(req.body.page as string) || 1;
     const limit = parseInt(req.body.limit as string) || 50;
-    
+
     // Build filters from request body
-    const allowedFilters = ['status', 'priority', 'assigneeId', 'groupId', 'overdue', 'completed', 'parentTaskId', 'isSubTask'];
+    const allowedFilters = ['status', 'priority', 'assigneeId', 'groupId', 'overdue', 'completed', 'escalated', 'parentTaskId', 'isSubTask'];
     const filters: TaskFilters = {};
     for (const key of allowedFilters) {
       if (req.body.hasOwnProperty(key)) {
         (filters as any)[key] = req.body[key];
       }
     }
-    console.log({filters})
+    console.log({ filters })
     const result = await taskService.getTasksWithFilters(filters, page, limit);
 
     return res.json({
@@ -126,14 +130,14 @@ export async function getTaskById(req: Request, res: Response, next: NextFunctio
   try {
     const taskId = parseInt(req.params.id);
     const task = await taskService.getTaskById(taskId);
-    
+
     if (!task) {
       return res.status(404).json({
-        success: false, 
+        success: false,
         message: "Task not found"
       });
     }
-    
+
     return res.json({
       success: true,
       message: "Task fetched successfully",
@@ -148,7 +152,7 @@ export async function getTaskStatusHistory(req: Request, res: Response, next: Ne
   try {
     const taskId = parseInt(req.params.id);
     const history = await taskService.getTaskStatusHistory(taskId);
-    
+
     return res.json({
       success: true,
       message: "Task status history fetched successfully",
@@ -206,9 +210,9 @@ export async function updateTask(req: Request, res: Response, next: NextFunction
     });
   } catch (error) {
     if (error instanceof Error) {
-      if (error.message.includes('Validation failed') || 
-          error.message.includes('not found') ||
-          error.message.includes('Cannot complete parent task')) {
+      if (error.message.includes('Validation failed') ||
+        error.message.includes('not found') ||
+        error.message.includes('Cannot complete parent task')) {
         return res.status(400).json({
           success: false,
           message: error.message
@@ -225,7 +229,7 @@ export async function deleteTask(req: Request, res: Response, next: NextFunction
     const userId = req.user?.id ? parseInt(req.user.id as string) : undefined;
 
     const deleted = await taskService.deleteTask(taskId, userId);
-    
+
     if (!deleted) {
       return res.status(404).json({
         success: false,
@@ -355,9 +359,9 @@ export async function escalateTask(req: Request, res: Response, next: NextFuncti
       data: serializeBigInt(task)
     });
   } catch (error) {
-    if (error instanceof Error && 
-        (error.message.includes('not found') || 
-         error.message.includes('Maximum escalation'))) {
+    if (error instanceof Error &&
+      (error.message.includes('not found') ||
+        error.message.includes('Maximum escalation'))) {
       return res.status(400).json({
         success: false,
         message: error.message
@@ -370,7 +374,7 @@ export async function escalateTask(req: Request, res: Response, next: NextFuncti
 export async function processEscalations(req: Request, res: Response, next: NextFunction) {
   try {
     await taskService.checkAndProcessEscalations();
-    
+
     return res.json({
       success: true,
       message: "Escalation processing completed"
@@ -447,7 +451,7 @@ export async function createSubtask(req: Request, res: Response, next: NextFunct
 export async function getOverdueTasks(req: Request, res: Response, next: NextFunction) {
   try {
     const tasks = await taskService.getOverdueTasks();
-    
+
     return res.json({
       success: true,
       message: "Overdue tasks fetched successfully",
@@ -461,7 +465,7 @@ export async function getOverdueTasks(req: Request, res: Response, next: NextFun
 export async function getDueTasks(req: Request, res: Response, next: NextFunction) {
   try {
     const tasks = await taskService.getDueTasks();
-    
+
     return res.json({
       success: true,
       message: "Due tasks fetched successfully",
@@ -475,7 +479,7 @@ export async function getDueTasks(req: Request, res: Response, next: NextFunctio
 export async function getTaskStats(req: Request, res: Response, next: NextFunction) {
   try {
     const stats = await taskService.getTaskStats();
-    
+
     return res.json({
       success: true,
       message: "Task statistics fetched successfully",
@@ -498,7 +502,7 @@ export async function getSchedulerConfig(req: Request, res: Response, next: Next
       escalationCron: settings.escalationCron,
       description: SCHEDULER_CONFIG_DESCRIPTIONS
     };
-    
+
     return res.json({
       success: true,
       message: "Scheduler configuration fetched successfully",
@@ -511,8 +515,8 @@ export async function getSchedulerConfig(req: Request, res: Response, next: Next
 
 export async function updateSchedulerConfig(req: Request, res: Response, next: NextFunction) {
   try {
-    const { 
-      dueTimeIntervalValue, 
+    const {
+      dueTimeIntervalValue,
       dueTimeIntervalUnit,
       dueTasksWindowValue,
       dueTasksWindowUnit,
@@ -522,7 +526,7 @@ export async function updateSchedulerConfig(req: Request, res: Response, next: N
       cronSchedule,
       escalationCron
     } = req.body;
-    
+
     const updated = await updateSchedulerSettings({
       dueTimeIntervalValue,
       dueTimeIntervalUnit,
@@ -549,7 +553,7 @@ export async function duplicateTask(req: Request, res: Response, next: NextFunct
   try {
     const taskId = parseInt(req.params.id);
     const userId = req.user?.id ? parseInt(req.user.id as string) : undefined;
-    
+
     const originalTask = await taskService.getTaskById(taskId);
     if (!originalTask) {
       return res.status(404).json({
@@ -663,12 +667,12 @@ export async function getAvailableStatusesForTaskType(req: Request, res: Respons
 export async function importFromCsv(req: Request, res: Response, next: NextFunction) {
   try {
     if (!req.file) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        message: 'No file uploaded' 
+        message: 'No file uploaded'
       });
     }
-    
+
     const results: CSVRow[] = [];
     const errors: string[] = [];
 
@@ -697,7 +701,7 @@ export async function importFromCsv(req: Request, res: Response, next: NextFunct
           reject(error);
         });
     });
-    
+
     const validRecords = results.filter(r => r.title || r.name);
     const recordsWithAssignees = results.filter(r => r.assigneeids || r.assigneeIds || r.assignee_ids || r.assigneeId || r.assignee_id);
     const recordsWithGroups = results.filter(r => r.groupids || r.groupIds || r.group_ids || r.groupId || r.group_id);
@@ -721,15 +725,15 @@ export async function importFromCsv(req: Request, res: Response, next: NextFunct
 // Process and validate CSV row
 function processCSVRow(row: CSVRow): CSVRow {
   const processedRow: CSVRow = {};
-  
+
   for (const [key, value] of Object.entries(row)) {
     const cleanKey = key.trim().toLowerCase().replace(/ /g, '_');
     const cleanValue = value ? value.trim() : '';
     processedRow[cleanKey] = cleanValue;
   }
-  
+
   // Validate assigneeIds if present
-  const assigneeIdsKey = Object.keys(processedRow).find(key => 
+  const assigneeIdsKey = Object.keys(processedRow).find(key =>
     ['assigneeids', 'assignee_ids', 'assigneeid', 'assignee_id'].includes(key)
   );
   if (assigneeIdsKey && processedRow[assigneeIdsKey]) {
@@ -740,9 +744,9 @@ function processCSVRow(row: CSVRow): CSVRow {
       throw new Error(`Invalid assignee IDs: ${invalidIds.join(', ')}`);
     }
   }
-  
+
   // Validate groupIds if present
-  const groupIdsKey = Object.keys(processedRow).find(key => 
+  const groupIdsKey = Object.keys(processedRow).find(key =>
     ['groupids', 'group_ids', 'groupid', 'group_id'].includes(key)
   );
   if (groupIdsKey && processedRow[groupIdsKey]) {
@@ -753,7 +757,7 @@ function processCSVRow(row: CSVRow): CSVRow {
       throw new Error(`Invalid group IDs: ${invalidIds.join(', ')}`);
     }
   }
-  
+
   return processedRow;
 }
 
@@ -798,14 +802,14 @@ export async function getRecurrence(req: Request, res: Response, next: NextFunct
   try {
     const recurrenceId = parseInt(req.params.id);
     const recurrence = await recurrenceService.getRecurrenceById(recurrenceId);
-    
+
     if (!recurrence) {
       return res.status(404).json({
         success: false,
         message: "Recurrence rule not found"
       });
     }
-    
+
     return res.json({
       success: true,
       message: "Recurrence rule fetched successfully",
@@ -853,7 +857,7 @@ export async function updateRecurrence(req: Request, res: Response, next: NextFu
 export async function deleteRecurrence(req: Request, res: Response, next: NextFunction) {
   try {
     const recurrenceId = parseInt(req.params.id);
-    
+
     await recurrenceService.deleteRecurrenceRule(recurrenceId);
 
     return res.json({

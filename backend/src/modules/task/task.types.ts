@@ -231,6 +231,8 @@ export interface UpdateTaskDto {
   isRecurring?: boolean;
   recurrenceId?: number;
   recurrence?: CreateRecurrenceDto; // New recurrence structure
+  assigneeIds?: number[];
+  groupIds?: number[];
 }
 
 export interface AssignTaskDto {
@@ -245,6 +247,7 @@ export interface TaskFilters {
   groupId?: number;
   overdue?: boolean;
   completed?: boolean;
+  escalated?: boolean;
   parentTaskId?: number;
   isSubTask?: boolean;
 }

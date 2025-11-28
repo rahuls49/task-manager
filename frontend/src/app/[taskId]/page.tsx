@@ -9,6 +9,8 @@ import { ArrowLeft, Calendar, Clock, FileText, Users } from "lucide-react"
 import { Task } from "../_types/task.types"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import EscalateButton from "./escalate-button"
+import { EditTaskButton } from "./edit-task-button"
+import { StatusHistory } from "./status-history"
 
 export default async function TaskPage({
     params,
@@ -33,9 +35,15 @@ export default async function TaskPage({
             Authorization: `Bearer ${session?.user?.token}`
         }
     })
+    const history = await axios.get(`${process.env.NEXT_PUBLIC_API_BASE_URL}/tasks/${taskId}/status-history`, {
+        headers: {
+            Authorization: `Bearer ${session?.user?.token}`
+        }
+    })
 
     const taskData: Task = task.data.data;
     const statusData = status.data.data;
+    const historyData = history.data.data;
 
     return (
         <div className="min-h-screen w-full bg-linear-to-br from-indigo-50 via-white to-purple-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 p-6 md:p-12 flex justify-center items-start">
@@ -64,7 +72,10 @@ export default async function TaskPage({
                                 <StatusSection currentStatus={taskData.status} statuses={statusData} taskId={taskId} />
                             </div>
                             <div className="flex flex-col gap-4 md:w-auto w-full">
-                                <EscalateButton taskId={taskId} />
+                                <div className="flex gap-2">
+                                    <EditTaskButton task={taskData} />
+                                    <EscalateButton taskId={taskId} />
+                                </div>
                                 <DueBanner task={taskData} />
                             </div>
                         </div>
@@ -78,6 +89,11 @@ export default async function TaskPage({
                                 <p className="text-slate-600 dark:text-slate-300 leading-relaxed text-lg">
                                     {taskData.Description}
                                 </p>
+
+                                <div className="pt-8">
+                                    <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Status History</h2>
+                                    <StatusHistory history={historyData} />
+                                </div>
                             </div>
 
                             <div className="space-y-6">
