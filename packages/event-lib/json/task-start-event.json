@@ -1,8 +1,10 @@
 [
   {
-    "endpoint": "http://localhost:3300/webhooks/task-started",
-    "api-key": "",
+    "endpoint": "http://localhost:4999/system/tasks/trigger-actions",
+    "api-key": "secret-key",
     "http-method": "POST",
-    "parameters": {}
+    "parameters": {
+      "event": "task_started"
+    }
   }
 ]

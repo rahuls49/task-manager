@@ -16,7 +16,9 @@
   "dependencies": {
     "@prisma/client": "^6.19.0",
     "@task-manager/event-lib": "workspace:*",
+    "@task-manager/queue-lib": "workspace:*",
     "@task-manager/rescheduler-lib": "workspace:*",
+    "bullmq": "^5.61.2",
     "@types/bcrypt": "^6.0.0",
     "bcrypt": "^6.0.0",
     "cors": "^2.8.5",

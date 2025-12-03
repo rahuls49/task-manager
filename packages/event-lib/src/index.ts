@@ -1,4 +1,6 @@
 import axios, { AxiosResponse } from 'axios';
+import * as fs from 'fs';
+import * as path from 'path';
 
 interface EventConfig {
   endpoint: string;
@@ -8,8 +10,16 @@ interface EventConfig {
 }
 
 export default async function eventHandler(params: any, fileName: string) {
-  const create_task_event: EventConfig[] = require(`../json/${fileName}.json`);
-  
+  let create_task_event: EventConfig[] = [];
+  try {
+    const jsonPath = path.join(__dirname, '..', 'json', `${fileName}.json`);
+    const jsonContent = fs.readFileSync(jsonPath, 'utf-8');
+    create_task_event = JSON.parse(jsonContent);
+  } catch (err) {
+    console.error(`Event-lib: event file not found for ${fileName}.json`, err);
+    return;
+  }
+
   // Process events without blocking
   create_task_event.forEach(async (event: EventConfig) => {
     try {
@@ -25,15 +35,26 @@ async function sendEventWithRetry(event: EventConfig, params: any, maxRetries: n
   
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      const config = {
-        method: event['http-method'],
+      const methodUpper = (event['http-method'] || 'GET').toUpperCase();
+      const apiKey = (event as any)['api-key'] || (event as any)['x-api-key'] || (event as any)['X-API-Key'];
+      const headers: Record<string, any> = {};
+      if (apiKey) {
+        headers['x-api-key'] = apiKey;
+      }
+
+      const config: any = {
+        method: methodUpper,
         url: event.endpoint,
-        headers: {
-          'api-key': event['api-key']
-        },
-        data: { ...event.parameters, ...params },
+        headers,
         timeout: 10000 // 10 second timeout
       };
+
+      // For GET/DELETE/HEAD, axios uses `params` for query params
+      if (['GET', 'DELETE', 'HEAD'].includes(methodUpper)) {
+        config.params = { ...event.parameters, ...params };
+      } else {
+        config.data = { ...event.parameters, ...params };
+      }
       
       const response = await axios(config);
       console.log(`Event sent successfully to ${event.endpoint} on attempt ${attempt}`);

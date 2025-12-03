@@ -20,7 +20,7 @@ export interface CreateStatusTransitionDto {
 }
 
 export async function createTaskType(data: CreateTaskTypeDto) {
-  const taskType = await prisma.taskType.create({
+  const taskType = await prisma.tasktype.create({
     data: {
       TypeName: data.typeName,
       Description: data.description,
@@ -36,7 +36,7 @@ export async function createTaskType(data: CreateTaskTypeDto) {
       OrderIndex: index + 1 // Sequential ordering starting from 1
     }));
 
-    await prisma.taskTypeStatus.createMany({
+    await prisma.tasktypestatuses.createMany({
       data: taskTypeStatuses
     });
   }
@@ -45,7 +45,7 @@ export async function createTaskType(data: CreateTaskTypeDto) {
 }
 
 export async function createStatusTransition(data: CreateStatusTransitionDto) {
-  return await prisma.statusTransitionRule.create({
+  return await prisma.statustransitionrules.create({
     data: {
       TaskTypeId: data.taskTypeId,
       FromStatusId: data.fromStatusId,
@@ -55,18 +55,18 @@ export async function createStatusTransition(data: CreateStatusTransitionDto) {
 }
 
 export async function getTaskTypeById(id: number) {
-  return await prisma.taskType.findUnique({
+  return await prisma.tasktype.findUnique({
     where: { Id: id },
     include: {
-      StatusTransitions: {
+      statustransitionrules: {
         include: {
-          FromStatus: true,
-          ToStatus: true
+          taskstatus_statustransitionrules_FromStatusIdTotaskstatus: true,
+          taskstatus_statustransitionrules_ToStatusIdTotaskstatus: true
         }
       },
-      TaskTypeStatuses: {
+      tasktypestatuses: {
         include: {
-          Status: true
+          taskstatus: true
         },
         orderBy: {
           OrderIndex: 'asc'
@@ -77,17 +77,17 @@ export async function getTaskTypeById(id: number) {
 }
 
 export async function getAllTaskTypes() {
-  return await prisma.taskType.findMany({
+  return await prisma.tasktype.findMany({
     include: {
-      StatusTransitions: {
+      statustransitionrules: {
         include: {
-          FromStatus: true,
-          ToStatus: true
+          taskstatus_statustransitionrules_FromStatusIdTotaskstatus: true,
+          taskstatus_statustransitionrules_ToStatusIdTotaskstatus: true
         }
       },
-      TaskTypeStatuses: {
+      tasktypestatuses: {
         include: {
-          Status: true
+          taskstatus: true
         },
         orderBy: {
           OrderIndex: 'asc'
@@ -98,27 +98,27 @@ export async function getAllTaskTypes() {
 }
 
 export async function getAllowedTransitions(taskTypeId: number, currentStatusId: number) {
-  const transitions = await prisma.statusTransitionRule.findMany({
+  const transitions = await prisma.statustransitionrules.findMany({
     where: {
       TaskTypeId: taskTypeId,
       FromStatusId: currentStatusId
     },
     include: {
-      ToStatus: true
+      taskstatus_statustransitionrules_ToStatusIdTotaskstatus: true
     }
   });
 
   return transitions.map(t => ({
     toStatusId: Number(t.ToStatusId),
-    toStatusName: t.ToStatus.StatusName
+    toStatusName: t.taskstatus_statustransitionrules_ToStatusIdTotaskstatus.StatusName
   }));
 }
 
 export async function getStatusesForTaskType(taskTypeId: number) {
-  const taskTypeStatuses = await prisma.taskTypeStatus.findMany({
+  const taskTypeStatuses = await prisma.tasktypestatuses.findMany({
     where: { TaskTypeId: taskTypeId },
     include: {
-      Status: true
+      taskstatus: true
     },
     orderBy: {
       OrderIndex: 'asc'
@@ -126,15 +126,15 @@ export async function getStatusesForTaskType(taskTypeId: number) {
   });
 
   return taskTypeStatuses.map(tts => ({
-    id: Number(tts.Status.Id),
-    statusName: tts.Status.StatusName,
+    id: Number(tts.taskstatus.Id),
+    statusName: tts.taskstatus.StatusName,
     orderIndex: tts.OrderIndex
   }));
 }
 
 export async function associateStatusesWithTaskType(taskTypeId: number, statusIds: number[]) {
   // Remove existing associations
-  await prisma.taskTypeStatus.deleteMany({
+  await prisma.tasktypestatuses.deleteMany({
     where: { TaskTypeId: taskTypeId }
   });
 
@@ -146,7 +146,7 @@ export async function associateStatusesWithTaskType(taskTypeId: number, statusId
       OrderIndex: index + 1
     }));
 
-    await prisma.taskTypeStatus.createMany({
+    await prisma.tasktypestatuses.createMany({
       data: taskTypeStatuses
     });
   }
@@ -154,7 +154,7 @@ export async function associateStatusesWithTaskType(taskTypeId: number, statusId
 
 export async function initializeDefaultTaskTypes() {
   // Get existing statuses
-  const statuses = await prisma.taskStatus.findMany();
+  const statuses = await prisma.taskstatus.findMany();
   const statusMap = new Map(statuses.map(s => [s.StatusName.toLowerCase(), Number(s.Id)]));
 
   // Define status IDs for sequential workflow

@@ -6,7 +6,7 @@ async function initializeTaskTypes() {
     console.log('🚀 Initializing task types and status transitions...');
 
     // Check if task types already exist
-    const existingTypes = await prisma.taskType.count();
+    const existingTypes = await prisma.tasktype.count();
     if (existingTypes > 0) {
       console.log('Task types already exist, skipping creation...');
       return;

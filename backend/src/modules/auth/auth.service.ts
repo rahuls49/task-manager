@@ -17,7 +17,7 @@ export interface AuthResponse {
 
 export async function signup(name: string, email: string, phone: string, password: string): Promise<AuthResponse> {
   // Check if user already exists
-  const existingUser = await prisma.assignee.findFirst({
+  const existingUser = await prisma.assignees.findFirst({
     where: {
       OR: [
         { Email: email },
@@ -35,7 +35,7 @@ export async function signup(name: string, email: string, phone: string, passwor
   const hashedPassword = await bcrypt.hash(password, saltRounds);
 
   // Create user
-  const user = await prisma.assignee.create({
+  const user = await prisma.assignees.create({
     data: {
       Name: name,
       Email: email,
@@ -65,7 +65,7 @@ export async function signup(name: string, email: string, phone: string, passwor
 
 export async function login(emailOrPhone: string, password: string): Promise<AuthResponse> {
   // Find user by email or phone
-  const user = await prisma.assignee.findFirst({
+  const user = await prisma.assignees.findFirst({
     where: {
       OR: [
         { Email: emailOrPhone },

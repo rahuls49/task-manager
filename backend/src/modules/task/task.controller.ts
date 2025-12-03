@@ -476,6 +476,20 @@ export async function getDueTasks(req: Request, res: Response, next: NextFunctio
   }
 }
 
+export async function getStartingTasks(req: Request, res: Response, next: NextFunction) {
+  try {
+    const tasks = await taskService.getStartingTasks();
+
+    return res.json({
+      success: true,
+      message: "Starting tasks fetched successfully",
+      data: tasks
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function getTaskStats(req: Request, res: Response, next: NextFunction) {
   try {
     const stats = await taskService.getTaskStats();

@@ -1,27 +1,19 @@
 [
   {
-    "endpoint": "http://localhost:3000",
-    "api-key": "abcd",
-    "http-method": "GET",
-    "parameters": {
-      "name": "value"
-    }
-  },
-  {
-    "endpoint": "http://localhost:3001",
-    "api-key": "abcd",
-    "http-method": "GET",
-    "parameters": {
-      "name": "value"
-    }
-  },
-  {
-    "endpoint": "https://wassraipur.apps.shreeshivam.net:9006/send/message",
+    "endpoint": "http://localhost:9000/send/message",
     "api-key": "",
     "http-method": "POST",
     "parameters": {
       "phone": "917999800869",
-      "message":"Task Created Successfully!"
+      "message": "Task Created Successfully!"
+    }
+  },
+  {
+    "endpoint": "http://localhost:4999/system/tasks/trigger-actions",
+    "api-key": "secret-key",
+    "http-method": "POST",
+    "parameters": {
+      "event": "task_created"
     }
   }
 ]

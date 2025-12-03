@@ -30,12 +30,12 @@ async function initializeTaskStatuses(): Promise<void> {
   for (const status of DEFAULT_TASK_STATUSES) {
     try {
       // Check if status already exists
-      const existing = await prisma.taskStatus.count({
+      const existing = await prisma.taskstatus.count({
         where: { StatusName: status.StatusName }
       });
       
       if (existing === 0) {
-        await prisma.taskStatus.create({
+        await prisma.taskstatus.create({
           data: { StatusName: status.StatusName }
         });
         console.log(`Added status: ${status.StatusName}`);
@@ -55,12 +55,12 @@ async function initializeTaskPriorities(): Promise<void> {
   for (const priority of DEFAULT_TASK_PRIORITIES) {
     try {
       // Check if priority already exists
-      const existing = await prisma.taskPriority.count({
+      const existing = await prisma.taskpriority.count({
         where: { PriorityName: priority.PriorityName }
       });
       
       if (existing === 0) {
-        await prisma.taskPriority.create({
+        await prisma.taskpriority.create({
           data: { PriorityName: priority.PriorityName }
         });
         console.log(`Added priority: ${priority.PriorityName}`);
@@ -110,12 +110,12 @@ async function initializeEscalationRules(): Promise<void> {
   for (const rule of defaultRules) {
     try {
       // Check if rule already exists
-      const existing = await prisma.escalationRule.count({
+      const existing = await prisma.escalationrules.count({
         where: { Name: rule.Name }
       });
       
       if (existing === 0) {
-        await prisma.escalationRule.create({
+      await prisma.escalationrules.create({
           data: {
             Name: rule.Name,
             ConditionType: rule.ConditionType,
@@ -138,7 +138,7 @@ async function initializeEscalationRules(): Promise<void> {
  * Get all task statuses
  */
 export async function getTaskStatuses(): Promise<any[]> {
-  const statuses = await prisma.taskStatus.findMany({
+  const statuses = await prisma.taskstatus.findMany({
     orderBy: { Id: 'asc' }
   });
   return statuses.map(status => ({
@@ -153,7 +153,7 @@ export async function getTaskStatuses(): Promise<any[]> {
 export async function getAvailableStatusesForTaskType(taskTypeId?: number): Promise<any[]> {
   if (!taskTypeId) {
     // Return all global statuses if no task type specified
-    const statuses = await prisma.taskStatus.findMany({
+    const statuses = await prisma.taskstatus.findMany({
       orderBy: { Id: 'asc' }
     });
     return statuses.map(status => ({
@@ -163,10 +163,10 @@ export async function getAvailableStatusesForTaskType(taskTypeId?: number): Prom
   }
 
   // First check if this is a sequential task type (has TaskTypeStatus records)
-  const taskTypeStatuses = await prisma.taskTypeStatus.findMany({
+  const taskTypeStatuses = await prisma.tasktypestatuses.findMany({
     where: { TaskTypeId: taskTypeId },
     include: {
-      Status: true
+      taskstatus: true
     },
     orderBy: {
       OrderIndex: 'asc'
@@ -176,17 +176,17 @@ export async function getAvailableStatusesForTaskType(taskTypeId?: number): Prom
   if (taskTypeStatuses.length > 0) {
     // Sequential task type - return statuses in order
     return taskTypeStatuses.map(tts => ({
-      Id: Number(tts.Status.Id),
-      StatusName: tts.Status.StatusName
+      Id: Number(tts.taskstatus.Id),
+      StatusName: tts.taskstatus.StatusName
     }));
   }
 
   // Check if this is a random task type (has StatusTransitionRule records)
-  const transitionRules = await prisma.statusTransitionRule.findMany({
+  const transitionRules = await prisma.statustransitionrules.findMany({
     where: { TaskTypeId: taskTypeId },
     include: {
-      FromStatus: true,
-      ToStatus: true
+      taskstatus_statustransitionrules_FromStatusIdTotaskstatus: true,
+      taskstatus_statustransitionrules_ToStatusIdTotaskstatus: true
     }
   });
 
@@ -195,8 +195,8 @@ export async function getAvailableStatusesForTaskType(taskTypeId?: number): Prom
     const statusMap = new Map();
 
     transitionRules.forEach(rule => {
-      statusMap.set(rule.FromStatus.Id, rule.FromStatus);
-      statusMap.set(rule.ToStatus.Id, rule.ToStatus);
+      statusMap.set(rule.taskstatus_statustransitionrules_FromStatusIdTotaskstatus.Id, rule.taskstatus_statustransitionrules_FromStatusIdTotaskstatus);
+      statusMap.set(rule.taskstatus_statustransitionrules_ToStatusIdTotaskstatus.Id, rule.taskstatus_statustransitionrules_ToStatusIdTotaskstatus);
     });
 
     return Array.from(statusMap.values())
@@ -208,7 +208,7 @@ export async function getAvailableStatusesForTaskType(taskTypeId?: number): Prom
   }
 
   // Fallback: return all statuses if no specific configuration found
-  const statuses = await prisma.taskStatus.findMany({
+  const statuses = await prisma.taskstatus.findMany({
     orderBy: { Id: 'asc' }
   });
   return statuses.map(status => ({
@@ -221,7 +221,7 @@ export async function getAvailableStatusesForTaskType(taskTypeId?: number): Prom
  * Create a new task status
  */
 export async function createTaskStatus(statusName: string): Promise<number> {
-  const status = await prisma.taskStatus.create({
+  const status = await prisma.taskstatus.create({
     data: { StatusName: statusName }
   });
   return Number(status.Id);
@@ -231,7 +231,7 @@ export async function createTaskStatus(statusName: string): Promise<number> {
  * Get all task priorities
  */
 export async function getTaskPriorities(): Promise<any[]> {
-  const priorities = await prisma.taskPriority.findMany({
+  const priorities = await prisma.taskpriority.findMany({
     orderBy: { Id: 'asc' }
   });
   return priorities.map(priority => ({
@@ -244,7 +244,7 @@ export async function getTaskPriorities(): Promise<any[]> {
  * Create a new task priority
  */
 export async function createTaskPriority(priorityName: string): Promise<number> {
-  const priority = await prisma.taskPriority.create({
+  const priority = await prisma.taskpriority.create({
     data: { PriorityName: priorityName }
   });
   return Number(priority.Id);
@@ -261,7 +261,7 @@ export async function getAssignees(search?: string): Promise<any[]> {
     ]
   } : {};
 
-  const assignees = await prisma.assignee.findMany({
+  const assignees = await prisma.assignees.findMany({
     where: whereClause,
     orderBy: { Name: 'asc' }
   });
@@ -277,7 +277,7 @@ export async function getAssignees(search?: string): Promise<any[]> {
  * Get all groups
  */
 export async function getGroups(): Promise<any[]> {
-  const groups = await prisma.groupMaster.findMany({
+  const groups = await prisma.groupmaster.findMany({
     orderBy: { GroupName: 'asc' }
   });
   return groups.map(group => ({
@@ -291,7 +291,7 @@ export async function getGroups(): Promise<any[]> {
  * Create a new assignee
  */
 export async function createAssignee(name: string, email: string, phone: string): Promise<number> {
-  const assignee = await prisma.assignee.create({
+  const assignee = await prisma.assignees.create({
     data: { Name: name, Email: email, Phone: phone }
   });
   return Number(assignee.Id);
@@ -301,7 +301,7 @@ export async function createAssignee(name: string, email: string, phone: string)
  * Create a new group
  */
 export async function createGroup(groupName: string, parentId?: number): Promise<number> {
-  const group = await prisma.groupMaster.create({
+  const group = await prisma.groupmaster.create({
     data: { 
       GroupName: groupName, 
       ParentId: parentId ? BigInt(parentId) : null 
@@ -314,7 +314,7 @@ export async function createGroup(groupName: string, parentId?: number): Promise
  * Add user to group
  */
 export async function addUserToGroup(groupId: number, userId: number): Promise<void> {
-  await prisma.userGroupMember.upsert({
+  await prisma.usergroupmembers.upsert({
     where: {
       GroupId_UserId: {
         GroupId: BigInt(groupId),
@@ -333,7 +333,7 @@ export async function addUserToGroup(groupId: number, userId: number): Promise<v
  * Remove user from group
  */
 export async function removeUserFromGroup(groupId: number, userId: number): Promise<void> {
-  await prisma.userGroupMember.delete({
+  await prisma.usergroupmembers.delete({
     where: {
       GroupId_UserId: {
         GroupId: BigInt(groupId),
@@ -347,16 +347,16 @@ export async function removeUserFromGroup(groupId: number, userId: number): Prom
  * Get group members
  */
 export async function getGroupMembers(groupId: number): Promise<any[]> {
-  const members = await prisma.userGroupMember.findMany({
+  const members = await prisma.usergroupmembers.findMany({
     where: { GroupId: BigInt(groupId) },
-    include: { User: true },
-    orderBy: { User: { Name: 'asc' } }
+    include: { assignees: true },
+    orderBy: { assignees: { Name: 'asc' } }
   });
   return members.map(member => ({
-    Id: Number(member.User.Id),
-    Name: member.User.Name,
-    Email: member.User.Email,
-    Phone: member.User.Phone
+    Id: Number(member.assignees.Id),
+    Name: member.assignees.Name,
+    Email: member.assignees.Email,
+    Phone: member.assignees.Phone
   }));
 }
 
@@ -365,12 +365,12 @@ export async function getGroupMembers(groupId: number): Promise<any[]> {
  */
 export async function assignAdminRoleToUser(userId: number): Promise<void> {
   try {
-    const adminRole = await prisma.role.findFirst({
+    const adminRole = await prisma.roles.findFirst({
       where: { Name: 'Administrator' }
     });
 
     if (adminRole) {
-      await prisma.userRole.upsert({
+      await prisma.userroles.upsert({
         where: {
           UserId_RoleId: {
             UserId: BigInt(userId),

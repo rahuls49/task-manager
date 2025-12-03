@@ -7,6 +7,7 @@ import authRouter from './modules/auth/auth.route';
 import verifyAuthToken from './middlewares/auth-middleware';
 import managementRouter from './modules/task/task.management.route';
 import taskSystemRouter from './modules/task/task.system.route';
+import { actionRouter } from './modules/action';
 import { recurringTaskScheduler } from '@task-manager/rescheduler-lib';
 
 const app = express();
@@ -23,6 +24,7 @@ app.use('/tasks', taskRouter);
 app.use('/system', taskSystemRouter);
 app.use('/auth', authRouter);
 app.use('/management', managementRouter);
+app.use('/actions', actionRouter);
 
 app.listen(port, "0.0.0.0", async () => {
   console.log(`Server running on port ${port}`);

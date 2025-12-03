@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -10,312 +7,398 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model TaskStatus {
-  Id         BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
-  StatusName String   @unique @db.VarChar(100)
-  Tasks      Task[]
-  FromTransitions StatusTransitionRule[] @relation("FromStatus")
-  ToTransitions   StatusTransitionRule[] @relation("ToStatus")
-  TaskTypeStatuses TaskTypeStatus[]
-  OldStatusHistory TaskStatusHistory[] @relation("OldStatus")
-  NewStatusHistory TaskStatusHistory[] @relation("NewStatus")
+model apicalls {
+  Id              BigInt                 @id @default(autoincrement()) @db.UnsignedBigInt
+  ApiDefinitionId BigInt                 @db.UnsignedBigInt
+  TaskId          BigInt?                @db.UnsignedBigInt
+  TriggerEvent    String                 @db.VarChar(100)
+  RequestUrl      String                 @db.VarChar(1000)
+  RequestMethod   apicalls_RequestMethod
+  RequestHeaders  Json?
+  RequestBody     Json?
+  ResponseStatus  Int?
+  ResponseBody    Json?
+  ErrorMessage    String?                @db.Text
+  ExecutedAt      DateTime               @default(now()) @db.Timestamp(0)
+  DurationMs      Int?
+  IsSuccess       Boolean                @default(false)
+  apidefinitions  apidefinitions         @relation(fields: [ApiDefinitionId], references: [Id], onDelete: Cascade, map: "ApiCalls_ApiDefinitionId_fkey")
 
-  @@map("TaskStatus")
+  @@index([ApiDefinitionId], map: "ApiCalls_ApiDefinitionId_fkey")
 }
 
-model TaskType {
-  Id                  BigInt                @id @default(autoincrement()) @db.UnsignedBigInt
-  TypeName            String                @unique @db.VarChar(100)
-  Description         String?               @db.Text
-  TransitionType      TransitionType        @default(SEQUENTIAL)
-  Tasks               Task[]
-  StatusTransitions   StatusTransitionRule[]
-  TaskTypeStatuses    TaskTypeStatus[]
-
-  @@map("TaskType")
+model apidefinitions {
+  Id             BigInt                    @id @default(autoincrement()) @db.UnsignedBigInt
+  Name           String                    @db.VarChar(255)
+  Description    String?                   @db.Text
+  Endpoint       String                    @db.VarChar(1000)
+  HttpMethod     apidefinitions_HttpMethod @default(GET)
+  Headers        Json?
+  Body           Json?
+  IsActive       Boolean                   @default(true)
+  CreatedAt      DateTime                  @default(now()) @db.Timestamp(0)
+  UpdatedAt      DateTime                  @default(now()) @db.Timestamp(0)
+  apicalls       apicalls[]
+  taskapiactions taskapiactions[]
 }
 
-model TaskTypeStatus {
-  Id              BigInt      @id @default(autoincrement()) @db.UnsignedBigInt
-  TaskTypeId      BigInt      @db.UnsignedBigInt
-  StatusId        BigInt      @db.UnsignedBigInt
-  OrderIndex      Int         @default(0) // For sequential ordering
-  TaskType        TaskType    @relation(fields: [TaskTypeId], references: [Id], onDelete: Cascade)
-  Status          TaskStatus  @relation(fields: [StatusId], references: [Id], onDelete: Cascade)
-
-  @@unique([TaskTypeId, StatusId])
-  @@map("TaskTypeStatuses")
+model assignees {
+  Id                                        BigInt              @id @default(autoincrement()) @db.UnsignedBigInt
+  Name                                      String              @db.VarChar(255)
+  Email                                     String              @unique(map: "Assignees_Email_key") @db.VarChar(255)
+  Phone                                     String              @unique(map: "Assignees_Phone_key") @db.VarChar(20)
+  Password                                  String?             @db.VarChar(255)
+  escalationhistory                         escalationhistory[]
+  taskassignees                             taskassignees[]
+  tasks_tasks_CreatedByToassignees          tasks[]             @relation("tasks_CreatedByToassignees")
+  tasks_tasks_EscalatedByToassignees        tasks[]             @relation("tasks_EscalatedByToassignees")
+  taskstatushistory                         taskstatushistory[]
+  usergroupmembers                          usergroupmembers[]
+  userroles_userroles_AssignedByToassignees userroles[]         @relation("userroles_AssignedByToassignees")
+  userroles_userroles_UserIdToassignees     userroles[]         @relation("userroles_UserIdToassignees")
 }
 
-model StatusTransitionRule {
-  Id              BigInt      @id @default(autoincrement()) @db.UnsignedBigInt
-  TaskTypeId      BigInt      @db.UnsignedBigInt
-  FromStatusId    BigInt      @db.UnsignedBigInt
-  ToStatusId      BigInt      @db.UnsignedBigInt
-  TaskType        TaskType    @relation(fields: [TaskTypeId], references: [Id], onDelete: Cascade)
-  FromStatus      TaskStatus  @relation("FromStatus", fields: [FromStatusId], references: [Id])
-  ToStatus        TaskStatus  @relation("ToStatus", fields: [ToStatusId], references: [Id])
+model escalationhistory {
+  Id            BigInt     @id @default(autoincrement()) @db.UnsignedBigInt
+  TaskId        BigInt     @db.UnsignedBigInt
+  PreviousLevel Int?
+  NewLevel      Int
+  TriggeredBy   BigInt?    @db.UnsignedBigInt
+  ActionTaken   String     @db.VarChar(255)
+  ActionTarget  String?    @db.VarChar(255)
+  Notes         String?    @db.Text
+  TriggeredAt   DateTime   @default(now()) @db.Timestamp(0)
+  tasks         tasks      @relation(fields: [TaskId], references: [Id], onDelete: Cascade, map: "EscalationHistory_TaskId_fkey")
+  assignees     assignees? @relation(fields: [TriggeredBy], references: [Id], map: "EscalationHistory_TriggeredBy_fkey")
 
-  @@unique([TaskTypeId, FromStatusId, ToStatusId])
-  @@map("StatusTransitionRules")
+  @@index([TaskId], map: "EscalationHistory_TaskId_fkey")
+  @@index([TriggeredBy], map: "EscalationHistory_TriggeredBy_fkey")
 }
 
-model TaskPriority {
-  Id           BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
-  PriorityName String   @unique @db.VarChar(100)
-  Tasks        Task[]
-
-  @@map("TaskPriority")
-}
-
-model Assignee {
-  Id                BigInt             @id @default(autoincrement()) @db.UnsignedBigInt
-  Name              String             @db.VarChar(255)
-  Email             String             @unique @db.VarChar(255)
-  Phone             String             @unique @db.VarChar(20)
-  Password          String?            @db.VarChar(255)
-  UserGroupMembers  UserGroupMember[]
-  TaskAssignees     TaskAssignee[]
-  EscalationHistory EscalationHistory[]
-  Tasks             Task[]             @relation("EscalatedBy")
-  CreatedTasks      Task[]             @relation("CreatedBy")
-  UserRoles         UserRole[]
-  AssignedRoles     UserRole[]         @relation("RoleAssignedBy")
-  TaskStatusChanges TaskStatusHistory[]
-
-  @@map("Assignees")
-}
-
-model GroupMaster {
-  GroupId          BigInt             @id @default(autoincrement()) @db.UnsignedBigInt
-  GroupName        String             @db.VarChar(255)
-  ParentId         BigInt?            @db.UnsignedBigInt
-  Parent           GroupMaster?       @relation("GroupHierarchy", fields: [ParentId], references: [GroupId], onDelete: SetNull)
-  Children         GroupMaster[]      @relation("GroupHierarchy")
-  UserGroupMembers UserGroupMember[]
-  TaskAssignees    TaskAssignee[]
-  EscalationRules  EscalationRule[]
-
-  @@map("GroupMaster")
-}
-
-model UserGroupMember {
-  GroupId  BigInt     @db.UnsignedBigInt
-  UserId   BigInt     @db.UnsignedBigInt
-  Group    GroupMaster @relation(fields: [GroupId], references: [GroupId], onDelete: Cascade)
-  User     Assignee    @relation(fields: [UserId], references: [Id], onDelete: Cascade)
-
-  @@id([GroupId, UserId])
-  @@map("UserGroupMembers")
-}
-
-model EscalationRule {
-  Id                  BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
-  Name                String   @db.VarChar(255)
-  ConditionType       String   @db.VarChar(100)
-  ConditionValue      String   @db.VarChar(255)
+model escalationrules {
+  Id                  BigInt       @id @default(autoincrement()) @db.UnsignedBigInt
+  Name                String       @db.VarChar(255)
+  ConditionType       String       @db.VarChar(100)
+  ConditionValue      String       @db.VarChar(255)
   MaxEscalationLevel  Int
-  NotificationGroupId BigInt?  @db.UnsignedBigInt
-  ActionType          String   @db.VarChar(100)
-  ActionValue         String?  @db.VarChar(255)
-  IsActive            Boolean  @default(true)
-  CreatedAt           DateTime @default(now()) @db.Timestamp(0)
-  UpdatedAt           DateTime @default(now()) @updatedAt @db.Timestamp(0)
-  NotificationGroup   GroupMaster? @relation(fields: [NotificationGroupId], references: [GroupId])
+  NotificationGroupId BigInt?      @db.UnsignedBigInt
+  ActionType          String       @db.VarChar(100)
+  ActionValue         String?      @db.VarChar(255)
+  IsActive            Boolean      @default(true)
+  CreatedAt           DateTime     @default(now()) @db.Timestamp(0)
+  UpdatedAt           DateTime     @default(now()) @db.Timestamp(0)
+  groupmaster         groupmaster? @relation(fields: [NotificationGroupId], references: [GroupId], map: "EscalationRules_NotificationGroupId_fkey")
 
-  @@map("EscalationRules")
+  @@index([NotificationGroupId], map: "EscalationRules_NotificationGroupId_fkey")
 }
 
-model RecurrenceRule {
-  Id            BigInt            @id @default(autoincrement()) @db.UnsignedBigInt
-  RecurrenceType RecurrenceType
-  EndDate       DateTime?         @db.Date
-  DailyRuleId   BigInt?           @db.UnsignedBigInt
-  WeeklyRuleId  BigInt?           @db.UnsignedBigInt
-  MonthlyRuleId BigInt?           @db.UnsignedBigInt
-  DailyRule     RepeatDailyRule?  @relation(fields: [DailyRuleId], references: [Id], onDelete: SetNull)
-  WeeklyRule    RepeatWeeklyRule? @relation(fields: [WeeklyRuleId], references: [Id], onDelete: SetNull)
-  MonthlyRule   RepeatMonthlyRule? @relation(fields: [MonthlyRuleId], references: [Id], onDelete: SetNull)
-  Tasks         Task[]
+model groupmaster {
+  GroupId           BigInt             @id @default(autoincrement()) @db.UnsignedBigInt
+  GroupName         String             @db.VarChar(255)
+  ParentId          BigInt?            @db.UnsignedBigInt
+  escalationrules   escalationrules[]
+  groupmaster       groupmaster?       @relation("groupmasterTogroupmaster", fields: [ParentId], references: [GroupId], map: "GroupMaster_ParentId_fkey")
+  other_groupmaster groupmaster[]      @relation("groupmasterTogroupmaster")
+  taskassignees     taskassignees[]
+  usergroupmembers  usergroupmembers[]
 
-  @@map("RecurrenceRules")
+  @@index([ParentId], map: "GroupMaster_ParentId_fkey")
 }
 
-model RepeatDailyRule {
-  Id                   BigInt          @id @default(autoincrement()) @db.UnsignedBigInt
-  RecurEveryXDays      Int             @default(1)
-  IntraDayFrequencyType IntraDayType?
-  IntraDayInterval     Int?
-  RecurrenceRules      RecurrenceRule[]
-
-  @@map("Repeat_DailyRules")
+model permissions {
+  Id              BigInt            @id @default(autoincrement()) @db.UnsignedBigInt
+  Name            String            @unique(map: "Permissions_Name_key") @db.VarChar(150)
+  Description     String?           @db.Text
+  Resource        String            @db.VarChar(100)
+  Action          String            @db.VarChar(50)
+  IsActive        Boolean           @default(true)
+  CreatedAt       DateTime          @default(now()) @db.Timestamp(0)
+  UpdatedAt       DateTime          @default(now()) @db.Timestamp(0)
+  rolepermissions rolepermissions[]
 }
 
-model RepeatWeeklyRule {
-  Id              BigInt          @id @default(autoincrement()) @db.UnsignedBigInt
-  RecurEveryNWeeks Int            @default(1)
-  OnSunday        Boolean         @default(false)
-  OnMonday        Boolean         @default(false)
-  OnTuesday       Boolean         @default(false)
-  OnWednesday     Boolean         @default(false)
-  OnThursday      Boolean         @default(false)
-  OnFriday        Boolean         @default(false)
-  OnSaturday      Boolean         @default(false)
-  RecurrenceRules RecurrenceRule[]
+model recurrencerules {
+  Id                  BigInt                         @id @default(autoincrement()) @db.UnsignedBigInt
+  RecurrenceType      recurrencerules_RecurrenceType
+  EndDate             DateTime?                      @db.Date
+  DailyRuleId         BigInt?                        @db.UnsignedBigInt
+  WeeklyRuleId        BigInt?                        @db.UnsignedBigInt
+  MonthlyRuleId       BigInt?                        @db.UnsignedBigInt
+  repeat_dailyrules   repeat_dailyrules?             @relation(fields: [DailyRuleId], references: [Id], map: "RecurrenceRules_DailyRuleId_fkey")
+  repeat_monthlyrules repeat_monthlyrules?           @relation(fields: [MonthlyRuleId], references: [Id], map: "RecurrenceRules_MonthlyRuleId_fkey")
+  repeat_weeklyrules  repeat_weeklyrules?            @relation(fields: [WeeklyRuleId], references: [Id], map: "RecurrenceRules_WeeklyRuleId_fkey")
+  tasks               tasks[]
 
-  @@map("Repeat_WeeklyRules")
+  @@index([DailyRuleId], map: "RecurrenceRules_DailyRuleId_fkey")
+  @@index([MonthlyRuleId], map: "RecurrenceRules_MonthlyRuleId_fkey")
+  @@index([WeeklyRuleId], map: "RecurrenceRules_WeeklyRuleId_fkey")
 }
 
-model RepeatMonthlyRule {
-  Id              BigInt                      @id @default(autoincrement()) @db.UnsignedBigInt
-  RuleType        MonthlyRuleType
-  RecurrenceRules RecurrenceRule[]
-  Months          RepeatMonthlyRuleMonth[]
-  Days            RepeatMonthlyRuleDay[]
-  Ordinals        RepeatMonthlyRuleOrdinal[]
-
-  @@map("Repeat_MonthlyRules")
+model repeat_dailyrules {
+  Id                    BigInt                                   @id @default(autoincrement()) @db.UnsignedBigInt
+  RecurEveryXDays       Int                                      @default(1)
+  IntraDayFrequencyType repeat_dailyrules_IntraDayFrequencyType?
+  IntraDayInterval      Int?
+  recurrencerules       recurrencerules[]
 }
 
-model RepeatMonthlyRuleMonth {
-  MonthlyRuleId BigInt            @db.UnsignedBigInt
-  MonthNumber   Int
-  MonthlyRule   RepeatMonthlyRule @relation(fields: [MonthlyRuleId], references: [Id], onDelete: Cascade)
-
-  @@id([MonthlyRuleId, MonthNumber])
-  @@map("Repeat_MonthlyRule_Months")
-}
-
-model RepeatMonthlyRuleDay {
-  MonthlyRuleId BigInt            @db.UnsignedBigInt
-  DayNumber     String            @db.VarChar(3)
-  MonthlyRule   RepeatMonthlyRule @relation(fields: [MonthlyRuleId], references: [Id], onDelete: Cascade)
+model repeat_monthlyrule_days {
+  MonthlyRuleId       BigInt              @db.UnsignedBigInt
+  DayNumber           String              @db.VarChar(3)
+  repeat_monthlyrules repeat_monthlyrules @relation(fields: [MonthlyRuleId], references: [Id], onDelete: Cascade, map: "Repeat_MonthlyRule_Days_MonthlyRuleId_fkey")
 
   @@id([MonthlyRuleId, DayNumber])
-  @@map("Repeat_MonthlyRule_Days")
 }
 
-model RepeatMonthlyRuleOrdinal {
-  MonthlyRuleId BigInt            @db.UnsignedBigInt
-  Ordinal       OrdinalType
-  DayOfWeek     DayOfWeek
-  MonthlyRule   RepeatMonthlyRule @relation(fields: [MonthlyRuleId], references: [Id], onDelete: Cascade)
+model repeat_monthlyrule_months {
+  MonthlyRuleId       BigInt              @db.UnsignedBigInt
+  MonthNumber         Int
+  repeat_monthlyrules repeat_monthlyrules @relation(fields: [MonthlyRuleId], references: [Id], onDelete: Cascade, map: "Repeat_MonthlyRule_Months_MonthlyRuleId_fkey")
+
+  @@id([MonthlyRuleId, MonthNumber])
+}
+
+model repeat_monthlyrule_ordinals {
+  MonthlyRuleId       BigInt                                @db.UnsignedBigInt
+  Ordinal             repeat_monthlyrule_ordinals_Ordinal
+  DayOfWeek           repeat_monthlyrule_ordinals_DayOfWeek
+  repeat_monthlyrules repeat_monthlyrules                   @relation(fields: [MonthlyRuleId], references: [Id], onDelete: Cascade, map: "Repeat_MonthlyRule_Ordinals_MonthlyRuleId_fkey")
 
   @@id([MonthlyRuleId, Ordinal, DayOfWeek])
-  @@map("Repeat_MonthlyRule_Ordinals")
 }
 
-model Task {
+model repeat_monthlyrules {
+  Id                          BigInt                        @id @default(autoincrement()) @db.UnsignedBigInt
+  RuleType                    repeat_monthlyrules_RuleType
+  recurrencerules             recurrencerules[]
+  repeat_monthlyrule_days     repeat_monthlyrule_days[]
+  repeat_monthlyrule_months   repeat_monthlyrule_months[]
+  repeat_monthlyrule_ordinals repeat_monthlyrule_ordinals[]
+}
+
+model repeat_weeklyrules {
+  Id               BigInt            @id @default(autoincrement()) @db.UnsignedBigInt
+  RecurEveryNWeeks Int               @default(1)
+  OnSunday         Boolean           @default(false)
+  OnMonday         Boolean           @default(false)
+  OnTuesday        Boolean           @default(false)
+  OnWednesday      Boolean           @default(false)
+  OnThursday       Boolean           @default(false)
+  OnFriday         Boolean           @default(false)
+  OnSaturday       Boolean           @default(false)
+  recurrencerules  recurrencerules[]
+}
+
+model rolepermissions {
+  Id           BigInt      @id @default(autoincrement()) @db.UnsignedBigInt
+  RoleId       BigInt      @db.UnsignedBigInt
+  PermissionId BigInt      @db.UnsignedBigInt
+  GrantedAt    DateTime    @default(now()) @db.Timestamp(0)
+  permissions  permissions @relation(fields: [PermissionId], references: [Id], onDelete: Cascade, map: "RolePermissions_PermissionId_fkey")
+  roles        roles       @relation(fields: [RoleId], references: [Id], onDelete: Cascade, map: "RolePermissions_RoleId_fkey")
+
+  @@unique([RoleId, PermissionId], map: "RolePermissions_RoleId_PermissionId_key")
+  @@index([PermissionId], map: "RolePermissions_PermissionId_fkey")
+}
+
+model roles {
   Id              BigInt            @id @default(autoincrement()) @db.UnsignedBigInt
-  ParentTaskId    BigInt?           @db.UnsignedBigInt
-  Title           String            @db.VarChar(255)
+  Name            String            @unique(map: "Roles_Name_key") @db.VarChar(100)
   Description     String?           @db.Text
-  DueDate         DateTime? @db.Date
-  DueTime         DateTime? @db.Time(0)
-  IsRecurring     Boolean           @default(false)
-  RecurrenceId    BigInt?           @db.UnsignedBigInt
-  TaskTypeId      BigInt?           @db.UnsignedBigInt
-  StatusId        BigInt?           @db.UnsignedBigInt
-  PriorityId      BigInt?           @db.UnsignedBigInt
-  StartDate       DateTime? @db.Date
-  StartTime       DateTime? @db.Time(0)
-  IsEscalated     Boolean           @default(false)
-  EscalationLevel Int               @default(0)
-  EscalatedAt     DateTime?         @db.Timestamp(0)
-  EscalatedBy     BigInt?           @db.UnsignedBigInt
-  CreatedBy       BigInt?           @db.UnsignedBigInt
-  IsDeleted       Boolean           @default(false)
-  DeletedAt       DateTime?         @db.Timestamp(0)
+  IsActive        Boolean           @default(true)
   CreatedAt       DateTime          @default(now()) @db.Timestamp(0)
-  UpdatedAt       DateTime          @default(now()) @updatedAt @db.Timestamp(0)
-  ParentTask      Task?             @relation("TaskHierarchy", fields: [ParentTaskId], references: [Id], onDelete: SetNull)
-  SubTasks        Task[]            @relation("TaskHierarchy")
-  Recurrence      RecurrenceRule?   @relation(fields: [RecurrenceId], references: [Id], onDelete: SetNull)
-  TaskType        TaskType?         @relation(fields: [TaskTypeId], references: [Id])
-  Status          TaskStatus?       @relation(fields: [StatusId], references: [Id])
-  Priority        TaskPriority?     @relation(fields: [PriorityId], references: [Id])
-  EscalatedByUser Assignee?         @relation("EscalatedBy", fields: [EscalatedBy], references: [Id])
-  CreatedByUser   Assignee?         @relation("CreatedBy", fields: [CreatedBy], references: [Id])
-  TaskAssignees   TaskAssignee[]
-  EscalationHistory EscalationHistory[]
-  StatusHistory     TaskStatusHistory[]
-
-  @@map("Tasks")
+  UpdatedAt       DateTime          @default(now()) @db.Timestamp(0)
+  rolepermissions rolepermissions[]
+  userroles       userroles[]
 }
 
-model TaskAssignee {
-  Id         Int       @id @default(autoincrement())
-  TaskId     BigInt    @db.UnsignedBigInt
-  AssigneeId BigInt?   @db.UnsignedBigInt
-  GroupId    BigInt?   @db.UnsignedBigInt
-  AssignedAt DateTime  @default(now()) @db.Timestamp(0)
-  Task       Task      @relation(fields: [TaskId], references: [Id], onDelete: Cascade)
-  Assignee   Assignee? @relation(fields: [AssigneeId], references: [Id], onDelete: Cascade)
-  Group      GroupMaster? @relation(fields: [GroupId], references: [GroupId], onDelete: Cascade)
-
-  @@unique([TaskId, AssigneeId, GroupId])
-  @@map("TaskAssignees")
-}
-
-model TaskStatusHistory {
-  Id           BigInt     @id @default(autoincrement()) @db.UnsignedBigInt
-  TaskId       BigInt     @db.UnsignedBigInt
-  OldStatusId  BigInt?    @db.UnsignedBigInt
-  NewStatusId  BigInt     @db.UnsignedBigInt
-  Remark       String?    @db.Text
-  ChangedBy    BigInt?    @db.UnsignedBigInt
-  ChangedAt    DateTime   @default(now()) @db.Timestamp(0)
-  Task         Task       @relation(fields: [TaskId], references: [Id], onDelete: Cascade)
-  OldStatus    TaskStatus? @relation("OldStatus", fields: [OldStatusId], references: [Id])
-  NewStatus    TaskStatus @relation("NewStatus", fields: [NewStatusId], references: [Id])
-  ChangedByUser Assignee? @relation(fields: [ChangedBy], references: [Id])
-
-  @@map("TaskStatusHistory")
-}
-
-model EscalationHistory {
-  Id           BigInt     @id @default(autoincrement()) @db.UnsignedBigInt
-  TaskId       BigInt     @db.UnsignedBigInt
-  PreviousLevel Int?
-  NewLevel     Int
-  TriggeredBy  BigInt?    @db.UnsignedBigInt
-  ActionTaken  String     @db.VarChar(255)
-  ActionTarget String?    @db.VarChar(255)
-  Notes        String?    @db.Text
-  TriggeredAt  DateTime   @default(now()) @db.Timestamp(0)
-  Task         Task       @relation(fields: [TaskId], references: [Id], onDelete: Cascade)
-  TriggeredByUser Assignee? @relation(fields: [TriggeredBy], references: [Id])
-
-  @@map("EscalationHistory")
-}
-
-model SchedulerConfig {
+model schedulerconfig {
   Id          BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
-  ConfigKey   String   @unique @db.VarChar(100)
+  ConfigKey   String   @unique(map: "SchedulerConfig_ConfigKey_key") @db.VarChar(100)
   ConfigValue String   @db.Text
   Description String?  @db.VarChar(255)
-  UpdatedAt   DateTime @default(now()) @updatedAt @db.Timestamp(0)
-
-  @@map("SchedulerConfig")
+  UpdatedAt   DateTime @default(now()) @db.Timestamp(0)
 }
 
-enum RecurrenceType {
+model statustransitionrules {
+  Id                                                        BigInt     @id @default(autoincrement()) @db.UnsignedBigInt
+  TaskTypeId                                                BigInt     @db.UnsignedBigInt
+  FromStatusId                                              BigInt     @db.UnsignedBigInt
+  ToStatusId                                                BigInt     @db.UnsignedBigInt
+  taskstatus_statustransitionrules_FromStatusIdTotaskstatus taskstatus @relation("statustransitionrules_FromStatusIdTotaskstatus", fields: [FromStatusId], references: [Id], map: "StatusTransitionRules_FromStatusId_fkey")
+  tasktype                                                  tasktype   @relation(fields: [TaskTypeId], references: [Id], onDelete: Cascade, map: "StatusTransitionRules_TaskTypeId_fkey")
+  taskstatus_statustransitionrules_ToStatusIdTotaskstatus   taskstatus @relation("statustransitionrules_ToStatusIdTotaskstatus", fields: [ToStatusId], references: [Id], map: "StatusTransitionRules_ToStatusId_fkey")
+
+  @@unique([TaskTypeId, FromStatusId, ToStatusId], map: "StatusTransitionRules_TaskTypeId_FromStatusId_ToStatusId_key")
+  @@index([FromStatusId], map: "StatusTransitionRules_FromStatusId_fkey")
+  @@index([ToStatusId], map: "StatusTransitionRules_ToStatusId_fkey")
+}
+
+model taskapiactions {
+  Id              BigInt         @id @default(autoincrement()) @db.UnsignedBigInt
+  TaskId          BigInt         @db.UnsignedBigInt
+  ApiDefinitionId BigInt         @db.UnsignedBigInt
+  TriggerEvent    String         @db.VarChar(100)
+  IsActive        Boolean        @default(true)
+  CreatedAt       DateTime       @default(now()) @db.Timestamp(0)
+  UpdatedAt       DateTime       @default(now()) @db.Timestamp(0)
+  apidefinitions  apidefinitions @relation(fields: [ApiDefinitionId], references: [Id], onDelete: Cascade, map: "TaskApiActions_ApiDefinitionId_fkey")
+  tasks           tasks          @relation(fields: [TaskId], references: [Id], onDelete: Cascade, map: "TaskApiActions_TaskId_fkey")
+
+  @@unique([TaskId, ApiDefinitionId, TriggerEvent], map: "TaskApiActions_TaskId_ApiDefinitionId_TriggerEvent_key")
+  @@index([ApiDefinitionId], map: "TaskApiActions_ApiDefinitionId_fkey")
+}
+
+model taskassignees {
+  Id          Int          @id @default(autoincrement())
+  TaskId      BigInt       @db.UnsignedBigInt
+  AssigneeId  BigInt?      @db.UnsignedBigInt
+  GroupId     BigInt?      @db.UnsignedBigInt
+  AssignedAt  DateTime     @default(now()) @db.Timestamp(0)
+  assignees   assignees?   @relation(fields: [AssigneeId], references: [Id], onDelete: Cascade, map: "TaskAssignees_AssigneeId_fkey")
+  groupmaster groupmaster? @relation(fields: [GroupId], references: [GroupId], onDelete: Cascade, map: "TaskAssignees_GroupId_fkey")
+  tasks       tasks        @relation(fields: [TaskId], references: [Id], onDelete: Cascade, map: "TaskAssignees_TaskId_fkey")
+
+  @@unique([TaskId, AssigneeId, GroupId], map: "TaskAssignees_TaskId_AssigneeId_GroupId_key")
+  @@index([AssigneeId], map: "TaskAssignees_AssigneeId_fkey")
+  @@index([GroupId], map: "TaskAssignees_GroupId_fkey")
+}
+
+model taskpriority {
+  Id           BigInt  @id @default(autoincrement()) @db.UnsignedBigInt
+  PriorityName String  @unique(map: "TaskPriority_PriorityName_key") @db.VarChar(100)
+  tasks        tasks[]
+}
+
+model tasks {
+  Id                                     BigInt              @id @default(autoincrement()) @db.UnsignedBigInt
+  ParentTaskId                           BigInt?             @db.UnsignedBigInt
+  Title                                  String              @db.VarChar(255)
+  Description                            String?             @db.Text
+  DueDate                                DateTime?           @db.Date
+  DueTime                                DateTime?           @db.Time(0)
+  IsRecurring                            Boolean             @default(false)
+  RecurrenceId                           BigInt?             @db.UnsignedBigInt
+  TaskTypeId                             BigInt?             @db.UnsignedBigInt
+  StatusId                               BigInt?             @db.UnsignedBigInt
+  PriorityId                             BigInt?             @db.UnsignedBigInt
+  StartDate                              DateTime?           @db.Date
+  StartTime                              DateTime?           @db.Time(0)
+  IsEscalated                            Boolean             @default(false)
+  EscalationLevel                        Int                 @default(0)
+  EscalatedAt                            DateTime?           @db.Timestamp(0)
+  EscalatedBy                            BigInt?             @db.UnsignedBigInt
+  IsDeleted                              Boolean             @default(false)
+  DeletedAt                              DateTime?           @db.Timestamp(0)
+  CreatedAt                              DateTime            @default(now()) @db.Timestamp(0)
+  UpdatedAt                              DateTime            @default(now()) @db.Timestamp(0)
+  CreatedBy                              BigInt?             @db.UnsignedBigInt
+  escalationhistory                      escalationhistory[]
+  taskapiactions                         taskapiactions[]
+  taskassignees                          taskassignees[]
+  assignees_tasks_CreatedByToassignees   assignees?          @relation("tasks_CreatedByToassignees", fields: [CreatedBy], references: [Id], map: "Tasks_CreatedBy_fkey")
+  assignees_tasks_EscalatedByToassignees assignees?          @relation("tasks_EscalatedByToassignees", fields: [EscalatedBy], references: [Id], map: "Tasks_EscalatedBy_fkey")
+  tasks                                  tasks?              @relation("tasksTotasks", fields: [ParentTaskId], references: [Id], map: "Tasks_ParentTaskId_fkey")
+  other_tasks                            tasks[]             @relation("tasksTotasks")
+  taskpriority                           taskpriority?       @relation(fields: [PriorityId], references: [Id], map: "Tasks_PriorityId_fkey")
+  recurrencerules                        recurrencerules?    @relation(fields: [RecurrenceId], references: [Id], map: "Tasks_RecurrenceId_fkey")
+  taskstatus                             taskstatus?         @relation(fields: [StatusId], references: [Id], map: "Tasks_StatusId_fkey")
+  tasktype                               tasktype?           @relation(fields: [TaskTypeId], references: [Id], map: "Tasks_TaskTypeId_fkey")
+  taskstatushistory                      taskstatushistory[]
+
+  @@index([CreatedBy], map: "Tasks_CreatedBy_fkey")
+  @@index([EscalatedBy], map: "Tasks_EscalatedBy_fkey")
+  @@index([ParentTaskId], map: "Tasks_ParentTaskId_fkey")
+  @@index([PriorityId], map: "Tasks_PriorityId_fkey")
+  @@index([RecurrenceId], map: "Tasks_RecurrenceId_fkey")
+  @@index([StatusId], map: "Tasks_StatusId_fkey")
+  @@index([TaskTypeId], map: "Tasks_TaskTypeId_fkey")
+}
+
+model taskstatus {
+  Id                                                                   BigInt                  @id @default(autoincrement()) @db.UnsignedBigInt
+  StatusName                                                           String                  @unique(map: "TaskStatus_StatusName_key") @db.VarChar(100)
+  statustransitionrules_statustransitionrules_FromStatusIdTotaskstatus statustransitionrules[] @relation("statustransitionrules_FromStatusIdTotaskstatus")
+  statustransitionrules_statustransitionrules_ToStatusIdTotaskstatus   statustransitionrules[] @relation("statustransitionrules_ToStatusIdTotaskstatus")
+  tasks                                                                tasks[]
+  taskstatushistory_taskstatushistory_NewStatusIdTotaskstatus          taskstatushistory[]     @relation("taskstatushistory_NewStatusIdTotaskstatus")
+  taskstatushistory_taskstatushistory_OldStatusIdTotaskstatus          taskstatushistory[]     @relation("taskstatushistory_OldStatusIdTotaskstatus")
+  tasktypestatuses                                                     tasktypestatuses[]
+}
+
+model taskstatushistory {
+  Id                                                   BigInt      @id @default(autoincrement()) @db.UnsignedBigInt
+  TaskId                                               BigInt      @db.UnsignedBigInt
+  OldStatusId                                          BigInt?     @db.UnsignedBigInt
+  NewStatusId                                          BigInt      @db.UnsignedBigInt
+  Remark                                               String?     @db.Text
+  ChangedBy                                            BigInt?     @db.UnsignedBigInt
+  ChangedAt                                            DateTime    @default(now()) @db.Timestamp(0)
+  assignees                                            assignees?  @relation(fields: [ChangedBy], references: [Id], map: "TaskStatusHistory_ChangedBy_fkey")
+  taskstatus_taskstatushistory_NewStatusIdTotaskstatus taskstatus  @relation("taskstatushistory_NewStatusIdTotaskstatus", fields: [NewStatusId], references: [Id], map: "TaskStatusHistory_NewStatusId_fkey")
+  taskstatus_taskstatushistory_OldStatusIdTotaskstatus taskstatus? @relation("taskstatushistory_OldStatusIdTotaskstatus", fields: [OldStatusId], references: [Id], map: "TaskStatusHistory_OldStatusId_fkey")
+  tasks                                                tasks       @relation(fields: [TaskId], references: [Id], onDelete: Cascade, map: "TaskStatusHistory_TaskId_fkey")
+
+  @@index([ChangedBy], map: "TaskStatusHistory_ChangedBy_fkey")
+  @@index([NewStatusId], map: "TaskStatusHistory_NewStatusId_fkey")
+  @@index([OldStatusId], map: "TaskStatusHistory_OldStatusId_fkey")
+  @@index([TaskId], map: "TaskStatusHistory_TaskId_fkey")
+}
+
+model tasktype {
+  Id                    BigInt                  @id @default(autoincrement()) @db.UnsignedBigInt
+  TypeName              String                  @unique(map: "TaskType_TypeName_key") @db.VarChar(100)
+  Description           String?                 @db.Text
+  TransitionType        tasktype_TransitionType @default(SEQUENTIAL)
+  statustransitionrules statustransitionrules[]
+  tasks                 tasks[]
+  tasktypestatuses      tasktypestatuses[]
+}
+
+model tasktypestatuses {
+  Id         BigInt     @id @default(autoincrement()) @db.UnsignedBigInt
+  TaskTypeId BigInt     @db.UnsignedBigInt
+  StatusId   BigInt     @db.UnsignedBigInt
+  OrderIndex Int        @default(0)
+  taskstatus taskstatus @relation(fields: [StatusId], references: [Id], onDelete: Cascade, map: "TaskTypeStatuses_StatusId_fkey")
+  tasktype   tasktype   @relation(fields: [TaskTypeId], references: [Id], onDelete: Cascade, map: "TaskTypeStatuses_TaskTypeId_fkey")
+
+  @@unique([TaskTypeId, StatusId], map: "TaskTypeStatuses_TaskTypeId_StatusId_key")
+  @@index([StatusId], map: "TaskTypeStatuses_StatusId_fkey")
+}
+
+model usergroupmembers {
+  GroupId     BigInt      @db.UnsignedBigInt
+  UserId      BigInt      @db.UnsignedBigInt
+  groupmaster groupmaster @relation(fields: [GroupId], references: [GroupId], onDelete: Cascade, map: "UserGroupMembers_GroupId_fkey")
+  assignees   assignees   @relation(fields: [UserId], references: [Id], onDelete: Cascade, map: "UserGroupMembers_UserId_fkey")
+
+  @@id([GroupId, UserId])
+  @@index([UserId], map: "UserGroupMembers_UserId_fkey")
+}
+
+model userroles {
+  Id                                        BigInt     @id @default(autoincrement()) @db.UnsignedBigInt
+  UserId                                    BigInt     @db.UnsignedBigInt
+  RoleId                                    BigInt     @db.UnsignedBigInt
+  AssignedAt                                DateTime   @default(now()) @db.Timestamp(0)
+  AssignedBy                                BigInt?    @db.UnsignedBigInt
+  assignees_userroles_AssignedByToassignees assignees? @relation("userroles_AssignedByToassignees", fields: [AssignedBy], references: [Id], map: "UserRoles_AssignedBy_fkey")
+  roles                                     roles      @relation(fields: [RoleId], references: [Id], onDelete: Cascade, map: "UserRoles_RoleId_fkey")
+  assignees_userroles_UserIdToassignees     assignees  @relation("userroles_UserIdToassignees", fields: [UserId], references: [Id], onDelete: Cascade, map: "UserRoles_UserId_fkey")
+
+  @@unique([UserId, RoleId], map: "UserRoles_UserId_RoleId_key")
+  @@index([AssignedBy], map: "UserRoles_AssignedBy_fkey")
+  @@index([RoleId], map: "UserRoles_RoleId_fkey")
+}
+
+enum recurrencerules_RecurrenceType {
   DAILY
   WEEKLY
   MONTHLY
 }
 
-enum IntraDayType {
-  MINUTES
-  HOURS
-}
-
-enum MonthlyRuleType {
-  BY_DAY_OF_MONTH
-  BY_ORDINAL_DAY_OF_WEEK
-}
-
-enum OrdinalType {
+enum repeat_monthlyrule_ordinals_Ordinal {
   FIRST
   SECOND
   THIRD
@@ -323,7 +406,17 @@ enum OrdinalType {
   LAST
 }
 
-enum DayOfWeek {
+enum repeat_monthlyrules_RuleType {
+  BY_DAY_OF_MONTH
+  BY_ORDINAL_DAY_OF_WEEK
+}
+
+enum repeat_dailyrules_IntraDayFrequencyType {
+  MINUTES
+  HOURS
+}
+
+enum repeat_monthlyrule_ordinals_DayOfWeek {
   SUNDAY
   MONDAY
   TUESDAY
@@ -333,64 +426,23 @@ enum DayOfWeek {
   SATURDAY
 }
 
-enum TransitionType {
+enum tasktype_TransitionType {
   SEQUENTIAL
   RANDOM
 }
 
-// ============================================================================
-// RBAC MODELS
-// ============================================================================
-
-model Role {
-  Id          BigInt          @id @default(autoincrement()) @db.UnsignedBigInt
-  Name        String          @unique @db.VarChar(100)
-  Description String?         @db.Text
-  IsActive    Boolean         @default(true)
-  CreatedAt   DateTime        @default(now()) @db.Timestamp(0)
-  UpdatedAt   DateTime        @default(now()) @updatedAt @db.Timestamp(0)
-  UserRoles   UserRole[]
-  RolePermissions RolePermission[]
-
-  @@map("Roles")
+enum apidefinitions_HttpMethod {
+  GET
+  POST
+  PUT
+  PATCH
+  DELETE
 }
 
-model Permission {
-  Id          BigInt          @id @default(autoincrement()) @db.UnsignedBigInt
-  Name        String          @unique @db.VarChar(150)
-  Description String?         @db.Text
-  Resource    String          @db.VarChar(100) // e.g., 'task', 'user', 'role'
-  Action      String          @db.VarChar(50)  // e.g., 'create', 'read', 'update', 'delete', 'manage'
-  IsActive    Boolean         @default(true)
-  CreatedAt   DateTime        @default(now()) @db.Timestamp(0)
-  UpdatedAt   DateTime        @default(now()) @updatedAt @db.Timestamp(0)
-  RolePermissions RolePermission[]
-
-  @@map("Permissions")
-}
-
-model RolePermission {
-  Id           BigInt     @id @default(autoincrement()) @db.UnsignedBigInt
-  RoleId       BigInt     @db.UnsignedBigInt
-  PermissionId BigInt     @db.UnsignedBigInt
-  GrantedAt    DateTime   @default(now()) @db.Timestamp(0)
-  Role         Role       @relation(fields: [RoleId], references: [Id], onDelete: Cascade)
-  Permission   Permission @relation(fields: [PermissionId], references: [Id], onDelete: Cascade)
-
-  @@unique([RoleId, PermissionId])
-  @@map("RolePermissions")
-}
-
-model UserRole {
-  Id        BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
-  UserId    BigInt    @db.UnsignedBigInt
-  RoleId    BigInt    @db.UnsignedBigInt
-  AssignedAt DateTime @default(now()) @db.Timestamp(0)
-  AssignedBy BigInt?  @db.UnsignedBigInt // User who assigned the role
-  User      Assignee  @relation(fields: [UserId], references: [Id], onDelete: Cascade)
-  Role      Role      @relation(fields: [RoleId], references: [Id], onDelete: Cascade)
-  AssignedByUser Assignee? @relation("RoleAssignedBy", fields: [AssignedBy], references: [Id])
-
-  @@unique([UserId, RoleId])
-  @@map("UserRoles")
+enum apicalls_RequestMethod {
+  GET
+  POST
+  PUT
+  PATCH
+  DELETE
 }

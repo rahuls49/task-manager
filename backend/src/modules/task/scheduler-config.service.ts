@@ -172,5 +172,5 @@ export function toSeconds(value: number, unit: SchedulerTimeUnit): number {
 }
 
 function schedulerConfigRepo() {
-  return prisma.schedulerConfig;
+  return prisma.schedulerconfig;
 }

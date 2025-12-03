@@ -1,3 +1,5 @@
+import { TaskApiAction } from './action.types';
+
 export interface Task {
     Id: number,
     ParentTaskId?: number,
@@ -27,7 +29,8 @@ export interface Task {
     groups?: Group[],
     subtasks: Task[],
     status: Status,
-    priority?: Priority
+    priority?: Priority,
+    apiActions?: TaskApiAction[]
 }
 
 export interface Assignee {

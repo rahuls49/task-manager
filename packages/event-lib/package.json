@@ -5,7 +5,7 @@
   "main": "dist/index.js",
   "type": "commonjs",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && powershell -Command \"Copy-Item -Path json -Destination dist -Recurse -Force\"",
     "start": "node dist/index.js"
   },
   "keywords": [],

@@ -36,7 +36,7 @@ export interface RoleWithPermissions {
 // ============================================================================
 
 export async function createRole(data: CreateRoleDto) {
-  return await prisma.role.create({
+  return await prisma.roles.create({
     data: {
       Name: data.name,
       Description: data.description
@@ -45,12 +45,12 @@ export async function createRole(data: CreateRoleDto) {
 }
 
 export async function getRoleById(id: number) {
-  return await prisma.role.findUnique({
+  return await prisma.roles.findUnique({
     where: { Id: id },
     include: {
-      RolePermissions: {
+      rolepermissions: {
         include: {
-          Permission: true
+          permissions: true
         }
       }
     }
@@ -58,12 +58,12 @@ export async function getRoleById(id: number) {
 }
 
 export async function getRoleByName(name: string) {
-  return await prisma.role.findUnique({
+  return await prisma.roles.findUnique({
     where: { Name: name },
     include: {
-      RolePermissions: {
+      rolepermissions: {
         include: {
-          Permission: true
+          permissions: true
         }
       }
     }
@@ -71,16 +71,16 @@ export async function getRoleByName(name: string) {
 }
 
 export async function getAllRoles() {
-  return await prisma.role.findMany({
+  return await prisma.roles.findMany({
     where: { IsActive: true },
     include: {
-      RolePermissions: {
+      rolepermissions: {
         include: {
-          Permission: true
+          permissions: true
         }
       },
       _count: {
-        select: { UserRoles: true }
+        select: { userroles: true }
       }
     },
     orderBy: { Name: 'asc' }
@@ -88,7 +88,7 @@ export async function getAllRoles() {
 }
 
 export async function updateRole(id: number, data: Partial<CreateRoleDto>) {
-  return await prisma.role.update({
+  return await prisma.roles.update({
     where: { Id: id },
     data: {
       Name: data.name,
@@ -99,14 +99,14 @@ export async function updateRole(id: number, data: Partial<CreateRoleDto>) {
 
 export async function deleteRole(id: number) {
   // Soft delete by deactivating
-  return await prisma.role.update({
+  return await prisma.roles.update({
     where: { Id: id },
     data: { IsActive: false }
   });
 }
 
 export async function activateRole(id: number) {
-  return await prisma.role.update({
+  return await prisma.roles.update({
     where: { Id: id },
     data: { IsActive: true }
   });
@@ -117,7 +117,7 @@ export async function activateRole(id: number) {
 // ============================================================================
 
 export async function createPermission(data: CreatePermissionDto) {
-  return await prisma.permission.create({
+  return await prisma.permissions.create({
     data: {
       Name: data.name,
       Description: data.description,
@@ -128,19 +128,19 @@ export async function createPermission(data: CreatePermissionDto) {
 }
 
 export async function getPermissionById(id: number) {
-  return await prisma.permission.findUnique({
+  return await prisma.permissions.findUnique({
     where: { Id: id }
   });
 }
 
 export async function getPermissionByName(name: string) {
-  return await prisma.permission.findUnique({
+  return await prisma.permissions.findUnique({
     where: { Name: name }
   });
 }
 
 export async function getAllPermissions() {
-  return await prisma.permission.findMany({
+  return await prisma.permissions.findMany({
     where: { IsActive: true },
     orderBy: [
       { Resource: 'asc' },
@@ -150,7 +150,7 @@ export async function getAllPermissions() {
 }
 
 export async function getPermissionsByResource(resource: string) {
-  return await prisma.permission.findMany({
+  return await prisma.permissions.findMany({
     where: {
       Resource: resource,
       IsActive: true
@@ -160,7 +160,7 @@ export async function getPermissionsByResource(resource: string) {
 }
 
 export async function updatePermission(id: number, data: Partial<CreatePermissionDto>) {
-  return await prisma.permission.update({
+  return await prisma.permissions.update({
     where: { Id: id },
     data: {
       Name: data.name,
@@ -173,14 +173,14 @@ export async function updatePermission(id: number, data: Partial<CreatePermissio
 
 export async function deletePermission(id: number) {
   // Soft delete by deactivating
-  return await prisma.permission.update({
+  return await prisma.permissions.update({
     where: { Id: id },
     data: { IsActive: false }
   });
 }
 
 export async function activatePermission(id: number) {
-  return await prisma.permission.update({
+  return await prisma.permissions.update({
     where: { Id: id },
     data: { IsActive: true }
   });
@@ -191,7 +191,7 @@ export async function activatePermission(id: number) {
 // ============================================================================
 
 export async function assignPermissionToRole(roleId: number, permissionId: number) {
-  return await prisma.rolePermission.create({
+  return await prisma.rolepermissions.create({
     data: {
       RoleId: roleId,
       PermissionId: permissionId
@@ -200,7 +200,7 @@ export async function assignPermissionToRole(roleId: number, permissionId: numbe
 }
 
 export async function removePermissionFromRole(roleId: number, permissionId: number) {
-  return await prisma.rolePermission.deleteMany({
+  return await prisma.rolepermissions.deleteMany({
     where: {
       RoleId: roleId,
       PermissionId: permissionId
@@ -209,17 +209,17 @@ export async function removePermissionFromRole(roleId: number, permissionId: num
 }
 
 export async function getRolePermissions(roleId: number) {
-  return await prisma.rolePermission.findMany({
+  return await prisma.rolepermissions.findMany({
     where: { RoleId: roleId },
     include: {
-      Permission: true
+      permissions: true
     }
   });
 }
 
 export async function setRolePermissions(roleId: number, permissionIds: number[]) {
   // Remove existing permissions
-  await prisma.rolePermission.deleteMany({
+  await prisma.rolepermissions.deleteMany({
     where: { RoleId: roleId }
   });
 
@@ -230,7 +230,7 @@ export async function setRolePermissions(roleId: number, permissionIds: number[]
       PermissionId: permissionId
     }));
 
-    await prisma.rolePermission.createMany({
+    await prisma.rolepermissions.createMany({
       data: rolePermissions
     });
   }
@@ -241,7 +241,7 @@ export async function setRolePermissions(roleId: number, permissionIds: number[]
 // ============================================================================
 
 export async function assignRoleToUser(userId: number, roleId: number, assignedBy?: number) {
-  return await prisma.userRole.create({
+  return await prisma.userroles.create({
     data: {
       UserId: userId,
       RoleId: roleId,
@@ -251,7 +251,7 @@ export async function assignRoleToUser(userId: number, roleId: number, assignedB
 }
 
 export async function removeRoleFromUser(userId: number, roleId: number) {
-  return await prisma.userRole.deleteMany({
+  return await prisma.userroles.deleteMany({
     where: {
       UserId: userId,
       RoleId: roleId
@@ -260,14 +260,14 @@ export async function removeRoleFromUser(userId: number, roleId: number) {
 }
 
 export async function getUserRoles(userId: number) {
-  return await prisma.userRole.findMany({
+  return await prisma.userroles.findMany({
     where: { UserId: userId },
     include: {
-      Role: {
+      roles: {
         include: {
-          RolePermissions: {
+          rolepermissions: {
             include: {
-              Permission: true
+              permissions: true
             }
           }
         }
@@ -281,8 +281,8 @@ export async function getUserPermissions(userId: number) {
 
   const permissions = new Set<string>();
   for (const userRole of userRoles) {
-    for (const rolePermission of userRole.Role.RolePermissions) {
-      permissions.add(`${rolePermission.Permission.Resource}:${rolePermission.Permission.Action}`);
+    for (const rolePermission of userRole.roles.rolepermissions) {
+      permissions.add(`${rolePermission.permissions.Resource}:${rolePermission.permissions.Action}`);
     }
   }
 
@@ -296,7 +296,7 @@ export async function hasPermission(userId: number, resource: string, action: st
 
 export async function setUserRoles(userId: number, roleIds: number[], assignedBy?: number) {
   // Remove existing roles
-  await prisma.userRole.deleteMany({
+  await prisma.userroles.deleteMany({
     where: { UserId: userId }
   });
 
@@ -308,7 +308,7 @@ export async function setUserRoles(userId: number, roleIds: number[], assignedBy
       AssignedBy: assignedBy
     }));
 
-    await prisma.userRole.createMany({
+    await prisma.userroles.createMany({
       data: userRoles
     });
   }
@@ -319,10 +319,10 @@ export async function setUserRoles(userId: number, roleIds: number[], assignedBy
 // ============================================================================
 
 export async function getUsersByRole(roleId: number) {
-  return await prisma.userRole.findMany({
+  return await prisma.userroles.findMany({
     where: { RoleId: roleId },
     include: {
-      User: {
+      assignees_userroles_UserIdToassignees: {
         select: {
           Id: true,
           Name: true,
@@ -335,10 +335,10 @@ export async function getUsersByRole(roleId: number) {
 }
 
 export async function getRolesByUser(userId: number) {
-  return await prisma.userRole.findMany({
+  return await prisma.userroles.findMany({
     where: { UserId: userId },
     include: {
-      Role: true
+      roles: true
     }
   });
 }

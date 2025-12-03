@@ -1,3 +1,6 @@
+import { InlineApiActionDto, TaskApiAction } from '../action/action.types';
+import { TaskActionEvent, HttpMethod } from '../action/action.events';
+
 // Interface for CSV data
 export interface CSVRow {
   [key: string]: string;
@@ -215,6 +218,7 @@ export interface CreateTaskDto {
   priorityId?: number;
   assigneeIds?: number[];
   groupIds?: number[];
+  apiActions?: InlineApiActionDto[]; // API actions to trigger on task events
 }
 
 export interface UpdateTaskDto {
@@ -233,6 +237,7 @@ export interface UpdateTaskDto {
   recurrence?: CreateRecurrenceDto; // New recurrence structure
   assigneeIds?: number[];
   groupIds?: number[];
+  apiActions?: InlineApiActionDto[]; // API actions to trigger on task events
 }
 
 export interface AssignTaskDto {
@@ -327,6 +332,7 @@ export interface TaskResponse extends Task {
   subtasks?: TaskResponse[];
   parentTask?: TaskResponse;
   recurrence?: RecurrenceResponse; // Updated to use new structure
+  apiActions?: TaskApiAction[]; // API actions configured for this task
 }
 
 export interface TaskListResponse {

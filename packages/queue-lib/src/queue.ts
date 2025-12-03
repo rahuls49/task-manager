@@ -17,11 +17,13 @@ export async function addTaskToQueue(task: any) {
           timeStr = timeStr + ':00'; // Convert to HH:MM:SS
         }
         
-        // Combine date and time into a proper UTC ISO string
-        const combinedStr = `${dateStr}T${timeStr}Z`; // Adding Z to indicate UTC
+        // Backend returns times in IST (Asia/Kolkata = UTC+5:30)
+        // We need to convert IST to UTC for proper scheduling
+        const combinedStr = `${dateStr}T${timeStr}+05:30`; // IST offset
         const combined = new Date(combinedStr);
         
         if (!Number.isNaN(combined.getTime())) {
+          console.log(`📅 Queue: Task due at IST ${dateStr}T${timeStr} -> UTC: ${combined.toISOString()}`);
           return combined.getTime();
         }
       } catch (e) {
@@ -73,5 +75,60 @@ export async function addTaskToQueue(task: any) {
     console.log(`✅ Task "${task?.Title ?? task?.title ?? task?.Id ?? 'unknown'}" scheduled to run in ${Math.round(delay / 1000)} seconds`);
   } catch (error) {
     console.error('❌ Failed to add task to queue:', error);
+  }
+}
+
+/**
+ * Add a task to the queue for the task_started event
+ * Uses StartDate/StartTime instead of DueDate/DueTime
+ */
+export async function addStartingTaskToQueue(task: any) {
+  function getStartTimestamp(t: any): number | undefined {
+    if (t?.StartDate && t?.StartTime) {
+      try {
+        const dateStr = t.StartDate.split('T')[0];
+        let timeStr = t.StartTime;
+        if (timeStr.length === 5) {
+          timeStr = timeStr + ':00';
+        }
+        
+        // Backend returns times in IST (Asia/Kolkata = UTC+5:30)
+        const combinedStr = `${dateStr}T${timeStr}+05:30`;
+        const combined = new Date(combinedStr);
+        
+        if (!Number.isNaN(combined.getTime())) {
+          console.log(`📅 Queue: Task starts at IST ${dateStr}T${timeStr} -> UTC: ${combined.toISOString()}`);
+          return combined.getTime();
+        }
+      } catch (e) {
+        console.error('Error parsing start date/time in queue:', e);
+      }
+    }
+    return undefined;
+  }
+
+  const startTs = getStartTimestamp(task);
+  const now = Date.now();
+  let delay: number;
+  
+  if (typeof startTs === 'number' && Number.isFinite(startTs)) {
+    delay = Math.max(startTs - now, 0);
+    console.log(`📅 Task starts at: ${new Date(startTs).toLocaleString()}, Current: ${new Date(now).toLocaleString()}, Delay: ${Math.round(delay / 1000)}s`);
+  } else {
+    delay = 0;
+    console.warn('⚠️ addStartingTaskToQueue: could not determine a valid start timestamp for task, scheduling immediately. Task:', task);
+  }
+
+  if (!Number.isFinite(delay) || Number.isNaN(delay)) {
+    console.warn('⚠️ Computed delay was not finite; falling back to 0. Raw value:', delay);
+    delay = 0;
+  }
+
+  try {
+    // Use 'startTask' job name to differentiate from 'dueTask'
+    await taskQueue.add('startTask', { ...task, __scheduledAt: now, __eventType: 'task_started' }, { delay });
+    console.log(`✅ Task "${task?.Title ?? task?.title ?? task?.Id ?? 'unknown'}" scheduled for START in ${Math.round(delay / 1000)} seconds`);
+  } catch (error) {
+    console.error('❌ Failed to add starting task to queue:', error);
   }
 }

@@ -27,6 +27,8 @@ import { recurringTaskScheduler } from "@task-manager/rescheduler-lib";
 import { istToUtc, utcToIstDate, utcToIstTime } from '../../utils/timezone';
 import { publishTaskEvent } from "./task.event-publisher";
 import { getSchedulerSettings } from "./scheduler-config.service";
+import * as actionService from "../action/action.service";
+import { TaskActionEvent, HttpMethod } from "../action/action.events";
 
 // ============================================================================
 // VALIDATION FUNCTIONS
@@ -145,7 +147,7 @@ export async function validateTaskData(data: CreateTaskDto | UpdateTaskDto): Pro
 }
 
 async function checkTaskExists(taskId: number): Promise<boolean> {
-  const count = await prisma.task.count({
+  const count = await prisma.tasks.count({
     where: {
       Id: taskId,
       IsDeleted: false
@@ -155,21 +157,21 @@ async function checkTaskExists(taskId: number): Promise<boolean> {
 }
 
 async function checkStatusExists(statusId: number): Promise<boolean> {
-  const count = await prisma.taskStatus.count({
+  const count = await prisma.taskstatus.count({
     where: { Id: statusId }
   });
   return count > 0;
 }
 
 async function checkPriorityExists(priorityId: number): Promise<boolean> {
-  const count = await prisma.taskPriority.count({
+  const count = await prisma.taskpriority.count({
     where: { Id: priorityId }
   });
   return count > 0;
 }
 
 async function checkTaskTypeExists(taskTypeId: number): Promise<boolean> {
-  const count = await prisma.taskType.count({
+  const count = await prisma.tasktype.count({
     where: { Id: taskTypeId }
   });
   return count > 0;
@@ -198,7 +200,7 @@ export async function getTasks(userId: number, page: number = 1, limit: number =
     IsDeleted: false,
     OR: [
       {
-        TaskAssignees: {
+        taskassignees: {
           some: {
             AssigneeId: userId
           }
@@ -220,13 +222,13 @@ export async function getTasks(userId: number, page: number = 1, limit: number =
   }
 
   if (filters?.assigneeId) {
-    where.TaskAssignees = {
+    where.taskassignees = {
       some: { AssigneeId: filters.assigneeId }
     };
   }
 
   if (filters?.groupId) {
-    where.TaskAssignees = {
+    where.taskassignees = {
       some: { GroupId: filters.groupId }
     };
   }
@@ -259,16 +261,14 @@ export async function getTasks(userId: number, page: number = 1, limit: number =
     }
   }
 
-  const total = await prisma.task.count({ where });
+  const total = await prisma.tasks.count({ where });
 
-  const tasks = await prisma.task.findMany({
+  const tasks = await prisma.tasks.findMany({
     where,
     include: {
-      Status: true,
-      Priority: true,
-      ParentTask: {
-        select: { Title: true }
-      }
+      taskstatus: true,
+      taskpriority: true,
+      tasks: { select: { Title: true } }
     },
     orderBy: { CreatedAt: 'desc' },
     skip: (page - 1) * limit,
@@ -298,13 +298,13 @@ export async function getTasksWithFilters(filters: TaskFilters, page: number = 1
   }
 
   if (filters.assigneeId) {
-    where.TaskAssignees = {
+    where.taskassignees = {
       some: { AssigneeId: filters.assigneeId }
     };
   }
 
   if (filters.groupId) {
-    where.TaskAssignees = {
+    where.taskassignees = {
       some: { GroupId: filters.groupId }
     };
   }
@@ -338,14 +338,14 @@ export async function getTasksWithFilters(filters: TaskFilters, page: number = 1
     }
   }
 
-  const total = await prisma.task.count({ where });
+  const total = await prisma.tasks.count({ where });
 
-  const tasks = await prisma.task.findMany({
+  const tasks = await prisma.tasks.findMany({
     where,
     include: {
-      Status: true,
-      Priority: true,
-      ParentTask: {
+      taskstatus: true,
+      taskpriority: true,
+      tasks: {
         select: { Title: true }
       }
     },
@@ -364,15 +364,15 @@ export async function getTasksWithFilters(filters: TaskFilters, page: number = 1
 }
 
 export async function getTaskById(taskId: number): Promise<TaskResponse | null> {
-  const task = await prisma.task.findFirst({
+  const task = await prisma.tasks.findFirst({
     where: {
       Id: taskId,
       IsDeleted: false
     },
     include: {
-      Status: true,
-      Priority: true,
-      ParentTask: {
+      taskstatus: true,
+      taskpriority: true,
+      tasks: {
         select: { Title: true }
       }
     }
@@ -385,37 +385,35 @@ export async function getTaskById(taskId: number): Promise<TaskResponse | null> 
   return await enhanceTaskWithDetails(task);
 } async function enhanceTaskWithDetails(task: any): Promise<TaskResponse> {
   // Get assignees
-  const taskAssignees = await prisma.taskAssignee.findMany({
+  const taskAssignees = await prisma.taskassignees.findMany({
     where: { TaskId: task.Id },
     include: {
-      Assignee: true,
-      Group: true
+      assignees: true,
+      groupmaster: true
     }
   });
 
   const assignees = taskAssignees.filter(ta => ta.AssigneeId).map(ta => ({
-    Id: Number(ta.Assignee!.Id),
-    Name: ta.Assignee!.Name,
-    Email: ta.Assignee!.Email
+    Id: Number(ta.assignees!.Id),
+    Name: ta.assignees!.Name,
+    Email: ta.assignees!.Email
   }));
 
   const groups = taskAssignees.filter(ta => ta.GroupId).map(ta => ({
-    GroupId: Number(ta.Group!.GroupId),
-    GroupName: ta.Group!.GroupName
+    GroupId: Number(ta.groupmaster!.GroupId),
+    GroupName: ta.groupmaster!.GroupName
   }));
 
   // Get subtasks
-  const subtasksData = await prisma.task.findMany({
+  const subtasksData = await prisma.tasks.findMany({
     where: {
       ParentTaskId: task.Id,
       IsDeleted: false
     },
     include: {
-      Status: true,
-      Priority: true,
-      ParentTask: {
-        select: { Title: true }
-      }
+      taskstatus: true,
+      taskpriority: true,
+      tasks: { select: { Title: true } }
     }
   });
 
@@ -434,6 +432,9 @@ export async function getTaskById(taskId: number): Promise<TaskResponse | null> 
       console.error('Error fetching recurrence details:', error);
     }
   }
+
+  // Get API actions for this task
+  const apiActions = await actionService.getTaskApiActions(Number(task.Id));
 
   return {
     Id: Number(task.Id),
@@ -460,21 +461,22 @@ export async function getTaskById(taskId: number): Promise<TaskResponse | null> 
     assignees,
     groups,
     subtasks,
-    status: task.Status ? { Id: Number(task.Status.Id), StatusName: task.Status.StatusName } : { Id: 1, StatusName: 'To Do' },
-    priority: task.Priority ? { Id: Number(task.Priority.Id), PriorityName: task.Priority.PriorityName } : undefined,
-    recurrence: recurrence || undefined
+    status: task.taskstatus ? { Id: Number(task.taskstatus.Id), StatusName: task.taskstatus.StatusName } : { Id: 1, StatusName: 'To Do' },
+    priority: task.taskpriority ? { Id: Number(task.taskpriority.Id), PriorityName: task.taskpriority.PriorityName } : undefined,
+    recurrence: recurrence || undefined,
+    apiActions: apiActions.length > 0 ? apiActions : undefined
   };
 }
 
 export async function getTaskStatusHistory(taskId: number): Promise<any[]> {
-  const history = await prisma.taskStatusHistory.findMany({
+  const history = await prisma.taskstatushistory.findMany({
     where: {
       TaskId: taskId
     },
     include: {
-      OldStatus: true,
-      NewStatus: true,
-      ChangedByUser: {
+      taskstatus_taskstatushistory_OldStatusIdTotaskstatus: true,
+      taskstatus_taskstatushistory_NewStatusIdTotaskstatus: true,
+      assignees: {
         select: {
           Id: true,
           Name: true,
@@ -492,14 +494,14 @@ export async function getTaskStatusHistory(taskId: number): Promise<any[]> {
     TaskId: Number(h.TaskId),
     OldStatusId: h.OldStatusId ? Number(h.OldStatusId) : null,
     NewStatusId: Number(h.NewStatusId),
-    OldStatusName: h.OldStatus?.StatusName || null,
-    NewStatusName: h.NewStatus?.StatusName,
+    OldStatusName: h.taskstatus_taskstatushistory_OldStatusIdTotaskstatus?.StatusName || null,
+    NewStatusName: h.taskstatus_taskstatushistory_NewStatusIdTotaskstatus?.StatusName,
     Remark: h.Remark,
     ChangedBy: h.ChangedBy ? Number(h.ChangedBy) : null,
-    ChangedByUser: h.ChangedByUser ? {
-      Id: Number(h.ChangedByUser.Id),
-      Name: h.ChangedByUser.Name,
-      Email: h.ChangedByUser.Email
+    ChangedByUser: h.assignees ? {
+      Id: Number(h.assignees.Id),
+      Name: h.assignees.Name,
+      Email: h.assignees.Email
     } : null,
     ChangedAt: h.ChangedAt
   }));
@@ -597,16 +599,16 @@ export async function createTask(data: CreateTaskDto, userId?: number | null): P
 
   // Set default status based on task type if not provided
   if (data.taskTypeId && !data.statusId) {
-    const taskTypeStatuses = await prisma.taskTypeStatus.findMany({
+    const taskTypeStatuses = await prisma.tasktypestatuses.findMany({
       where: { TaskTypeId: data.taskTypeId },
       orderBy: { OrderIndex: 'asc' },
-      include: { Status: true }
+      include: { taskstatus: true }
     });
 
     if (taskTypeStatuses.length > 0) {
       // For sequential types, start with the first status (lowest OrderIndex)
       // For random types, also start with the first status for consistency
-      data.statusId = Number(taskTypeStatuses[0].Status.Id);
+      data.statusId = Number(taskTypeStatuses[0].taskstatus.Id);
     }
   }
 
@@ -644,7 +646,7 @@ export async function createTask(data: CreateTaskDto, userId?: number | null): P
 
   console.log('🔍 Task data to create:', taskData);
 
-  const task = await prisma.task.create({
+  const task = await prisma.tasks.create({
     data: taskData
   });
 
@@ -658,6 +660,14 @@ export async function createTask(data: CreateTaskDto, userId?: number | null): P
     });
   }
 
+  // Create API actions if specified
+  console.log('🔔 Checking for API actions:', { hasApiActions: !!data.apiActions, count: data.apiActions?.length || 0, apiActions: data.apiActions });
+  if (data.apiActions && data.apiActions.length > 0) {
+    console.log('✅ Creating API actions for task:', taskId, data.apiActions);
+    await actionService.createTaskApiActionsFromInline(taskId, data.apiActions);
+    console.log('✅ API actions created successfully');
+  }
+
   const createdTask = await getTaskById(taskId);
 
   // Log task creation event
@@ -669,15 +679,58 @@ export async function createTask(data: CreateTaskDto, userId?: number | null): P
     metadata: { taskData: data }
   }, createdTask || undefined);
 
+  // Trigger task-specific API actions for task_created event
+  await actionService.triggerApiActionsForEvent(taskId, TaskActionEvent.TASK_CREATED, createdTask);
+
+  // Trigger task-specific API actions based on initial task state
+  if (data.assigneeIds && data.assigneeIds.length > 0 || data.groupIds && data.groupIds.length > 0) {
+    await actionService.triggerApiActionsForEvent(taskId, TaskActionEvent.TASK_ASSIGNED, createdTask);
+  }
+
+  if (createdTask && createdTask.StatusId === TASK_STATUS.IN_PROGRESS) {
+    await actionService.triggerApiActionsForEvent(taskId, TaskActionEvent.TASK_STARTED, createdTask);
+  } else if (createdTask && createdTask.StatusId === TASK_STATUS.COMPLETED) {
+    await actionService.triggerApiActionsForEvent(taskId, TaskActionEvent.TASK_COMPLETED, createdTask);
+  }
+
+  if (data.priorityId) {
+    await actionService.triggerApiActionsForEvent(taskId, TaskActionEvent.TASK_PRIORITY_CHANGED, createdTask);
+  }
+
+  if (data.dueDate) {
+    await actionService.triggerApiActionsForEvent(taskId, TaskActionEvent.TASK_DUE_DATE_CHANGED, createdTask);
+  }
+
+  if (data.dueTime) {
+    await actionService.triggerApiActionsForEvent(taskId, TaskActionEvent.TASK_DUE_TIME_CHANGED, createdTask);
+  }
+
+  if (data.startDate) {
+    await actionService.triggerApiActionsForEvent(taskId, TaskActionEvent.TASK_START_DATE_CHANGED, createdTask);
+  }
+
+  if (data.startTime) {
+    await actionService.triggerApiActionsForEvent(taskId, TaskActionEvent.TASK_START_TIME_CHANGED, createdTask);
+  }
+
+  if (data.recurrence) {
+    await actionService.triggerApiActionsForEvent(taskId, TaskActionEvent.TASK_RECURRENCE_MODIFIED, createdTask);
+  }
+
+  // Trigger API actions for subtask_added event on parent task
+  if (data.parentTaskId) {
+    await actionService.triggerApiActionsForEvent(data.parentTaskId, TaskActionEvent.SUBTASK_ADDED, createdTask);
+  }
+
   // Set default EndDate for intra-day recurrence if not set
   if (data.isRecurring && recurrenceId && data.recurrence?.recurrenceType === 'DAILY' && data.recurrence.dailyRule?.intraDayFrequencyType) {
-    const existingRecurrence = await prisma.recurrenceRule.findUnique({
+    const existingRecurrence = await prisma.recurrencerules.findUnique({
       where: { Id: recurrenceId },
-      include: { DailyRule: true }
+      include: { repeat_dailyrules: true }
     });
-    if (existingRecurrence && !existingRecurrence.EndDate && existingRecurrence.DailyRule?.IntraDayFrequencyType) {
+    if (existingRecurrence && !existingRecurrence.EndDate && existingRecurrence.repeat_dailyrules?.IntraDayFrequencyType) {
       // Set EndDate to the task's due date for intra-day recurrence
-      await prisma.recurrenceRule.update({
+      await prisma.recurrencerules.update({
         where: { Id: recurrenceId },
         data: { EndDate: data.dueDate ? new Date(data.dueDate) : null }
       });
@@ -817,7 +870,7 @@ export async function updateTask(taskId: number, data: UpdateTaskDto, userId?: n
   updateData.UpdatedAt = new Date();
   // console.log('🔍 updateData to apply:', updateData); // debug logging removed
 
-  await prisma.task.update({
+  await prisma.tasks.update({
     where: { Id: taskId },
     data: updateData
   });
@@ -825,7 +878,7 @@ export async function updateTask(taskId: number, data: UpdateTaskDto, userId?: n
   // Save status change history if status was changed
   // Save status change history if status was changed
   if (data.statusId !== undefined && data.statusId !== currentTask.StatusId) {
-    await prisma.taskStatusHistory.create({
+    await prisma.taskstatushistory.create({
       data: {
         TaskId: taskId,
         OldStatusId: currentTask.StatusId || null,
@@ -845,8 +898,67 @@ export async function updateTask(taskId: number, data: UpdateTaskDto, userId?: n
     });
   }
 
+  // Update API actions if provided
+  if (data.apiActions !== undefined) {
+    // Delete existing API actions and create new ones
+    await actionService.deleteAllTaskApiActions(taskId);
+    if (data.apiActions.length > 0) {
+      await actionService.createTaskApiActionsFromInline(taskId, data.apiActions);
+    }
+  }
+
   // Log update event
   await logTaskUpdateEvents(currentTask, data, userId, { recurrenceChanged });
+
+  // Get updated task for triggering API actions
+  const updatedTask = await getTaskById(taskId);
+
+  // Trigger task-specific API actions for specific events
+  if (data.priorityId !== undefined && data.priorityId !== currentTask.PriorityId) {
+    await actionService.triggerApiActionsForEvent(taskId, TaskActionEvent.TASK_PRIORITY_CHANGED, updatedTask);
+  }
+
+  // Trigger task-specific API actions for due date change
+  if (data.dueDate !== undefined && data.dueDate !== currentTask.DueDate) {
+    await actionService.triggerApiActionsForEvent(taskId, TaskActionEvent.TASK_DUE_DATE_CHANGED, updatedTask);
+  }
+
+  // Trigger task-specific API actions for due time change
+  if (data.dueTime !== undefined && data.dueTime !== currentTask.DueTime) {
+    await actionService.triggerApiActionsForEvent(taskId, TaskActionEvent.TASK_DUE_TIME_CHANGED, updatedTask);
+  }
+
+  // Trigger task-specific API actions for start date change
+  if (data.startDate !== undefined && data.startDate !== currentTask.StartDate) {
+    await actionService.triggerApiActionsForEvent(taskId, TaskActionEvent.TASK_START_DATE_CHANGED, updatedTask);
+  }
+
+  // Trigger task-specific API actions for start time change
+  if (data.startTime !== undefined && data.startTime !== currentTask.StartTime) {
+    await actionService.triggerApiActionsForEvent(taskId, TaskActionEvent.TASK_START_TIME_CHANGED, updatedTask);
+  }
+
+  // Trigger task-specific API actions for assignee change
+  if (data.assigneeIds !== undefined || data.groupIds !== undefined) {
+    await actionService.triggerApiActionsForEvent(taskId, TaskActionEvent.TASK_ASSIGNED, updatedTask);
+  }
+
+  // Trigger task-specific API actions for task_updated event
+  await actionService.triggerApiActionsForEvent(taskId, TaskActionEvent.TASK_UPDATED, updatedTask);
+
+  // Trigger specific event for status change
+  if (data.statusId !== undefined && data.statusId !== currentTask.StatusId) {
+    await actionService.triggerApiActionsForEvent(taskId, TaskActionEvent.TASK_STATUS_CHANGED, updatedTask);
+
+    // Trigger task-specific API actions for status events
+    if (data.statusId === TASK_STATUS.IN_PROGRESS) {
+      await actionService.triggerApiActionsForEvent(taskId, TaskActionEvent.TASK_STARTED, updatedTask);
+    } else if (data.statusId === TASK_STATUS.COMPLETED) {
+      await actionService.triggerApiActionsForEvent(taskId, TaskActionEvent.TASK_COMPLETED, updatedTask);
+    } else if (currentTask.StatusId === TASK_STATUS.COMPLETED) {
+      await actionService.triggerApiActionsForEvent(taskId, TaskActionEvent.TASK_REOPENED, updatedTask);
+    }
+  }
 
   // Handle recurrence rescheduling if needed
   if (recurrenceChanged || data.dueDate || data.dueTime) {
@@ -855,12 +967,20 @@ export async function updateTask(taskId: number, data: UpdateTaskDto, userId?: n
     } else {
       recurringTaskScheduler.cancelTask(taskId);
     }
+
+    // Trigger specific event for rescheduling
+    await actionService.triggerApiActionsForEvent(taskId, TaskActionEvent.TASK_RESCHEDULED, updatedTask);
+  }
+
+  // Trigger specific event for recurrence modification
+  if (recurrenceChanged) {
+    await actionService.triggerApiActionsForEvent(taskId, TaskActionEvent.TASK_RECURRENCE_MODIFIED, updatedTask);
   }
 }
 
 async function validateStatusTransition(taskId: number, currentStatusId: number, newStatusId: number): Promise<void> {
   // Get task type information
-  const task = await prisma.task.findUnique({
+  const task = await prisma.tasks.findUnique({
     where: { Id: taskId, IsDeleted: false },
     select: { TaskTypeId: true }
   });
@@ -873,7 +993,7 @@ async function validateStatusTransition(taskId: number, currentStatusId: number,
 
   // If task has a type, validate that the new status is associated with this task type
   if (taskTypeId) {
-    const statusAssociationCount = await prisma.taskTypeStatus.count({
+    const statusAssociationCount = await prisma.tasktypestatuses.count({
       where: {
         TaskTypeId: taskTypeId,
         StatusId: newStatusId
@@ -882,7 +1002,7 @@ async function validateStatusTransition(taskId: number, currentStatusId: number,
 
     if (statusAssociationCount === 0) {
       // Get task type name for error message
-      const taskType = await prisma.taskType.findUnique({
+      const taskType = await prisma.tasktype.findUnique({
         where: { Id: taskTypeId },
         select: { TypeName: true }
       });
@@ -892,7 +1012,7 @@ async function validateStatusTransition(taskId: number, currentStatusId: number,
     }
 
     // Also validate against transition rules if they exist
-    const transitionCount = await prisma.statusTransitionRule.count({
+    const transitionCount = await prisma.statustransitionrules.count({
       where: {
         TaskTypeId: taskTypeId,
         FromStatusId: currentStatusId,
@@ -901,13 +1021,13 @@ async function validateStatusTransition(taskId: number, currentStatusId: number,
     });
 
     // If there are transition rules defined, enforce them
-    const totalTransitions = await prisma.statusTransitionRule.count({
+    const totalTransitions = await prisma.statustransitionrules.count({
       where: { TaskTypeId: taskTypeId }
     });
 
     if (totalTransitions > 0 && transitionCount === 0) {
       // Get task type name for error message
-      const taskType = await prisma.taskType.findUnique({
+      const taskType = await prisma.tasktype.findUnique({
         where: { Id: taskTypeId },
         select: { TypeName: true }
       });
@@ -919,7 +1039,7 @@ async function validateStatusTransition(taskId: number, currentStatusId: number,
 
   // Cannot mark parent task as completed if subtasks are incomplete
   if (newStatusId === TASK_STATUS.COMPLETED) {
-    const incompleteSubtasks = await prisma.task.count({
+    const incompleteSubtasks = await prisma.tasks.count({
       where: {
         ParentTaskId: taskId,
         StatusId: { not: TASK_STATUS.COMPLETED },
@@ -1094,8 +1214,16 @@ export async function deleteTask(taskId: number, userId?: number): Promise<boole
     return false;
   }
 
+  // Trigger API actions for task_deleted event before deletion
+  await actionService.triggerApiActionsForEvent(taskId, TaskActionEvent.TASK_DELETED, task);
+
+  // Trigger API actions for subtask_removed event on parent task
+  if (task.ParentTaskId) {
+    await actionService.triggerApiActionsForEvent(Number(task.ParentTaskId), TaskActionEvent.SUBTASK_REMOVED, task);
+  }
+
   // Soft delete - update IsDeleted flag
-  const result = await prisma.task.updateMany({
+  const result = await prisma.tasks.updateMany({
     where: { Id: taskId },
     data: {
       IsDeleted: true,
@@ -1140,18 +1268,21 @@ export async function assignTask(taskId: number, assignData: AssignTaskDto, user
     timestamp: new Date(),
     metadata: { assigneeIds: assignData.assigneeIds, groupIds: assignData.groupIds }
   }, updatedTask || task);
+
+  // Trigger task-specific API actions for task_assigned event
+  await actionService.triggerApiActionsForEvent(taskId, TaskActionEvent.TASK_ASSIGNED, updatedTask);
 }
 
 async function assignTaskToUsers(taskId: number, assignData: AssignTaskDto): Promise<void> {
   // Remove existing assignments
-  await prisma.taskAssignee.deleteMany({
+  await prisma.taskassignees.deleteMany({
     where: { TaskId: taskId }
   });
 
   // Add new user assignments
   if (assignData.assigneeIds && assignData.assigneeIds.length > 0) {
     for (const assigneeId of assignData.assigneeIds) {
-      await prisma.taskAssignee.create({
+      await prisma.taskassignees.create({
         data: {
           TaskId: taskId,
           AssigneeId: assigneeId
@@ -1163,7 +1294,7 @@ async function assignTaskToUsers(taskId: number, assignData: AssignTaskDto): Pro
   // Add new group assignments
   if (assignData.groupIds && assignData.groupIds.length > 0) {
     for (const groupId of assignData.groupIds) {
-      await prisma.taskAssignee.create({
+      await prisma.taskassignees.create({
         data: {
           TaskId: taskId,
           GroupId: groupId
@@ -1184,7 +1315,7 @@ export async function unassignTask(taskId: number, assigneeId?: number, groupId?
     where.GroupId = groupId;
   }
 
-  const result = await prisma.taskAssignee.deleteMany({
+  const result = await prisma.taskassignees.deleteMany({
     where
   });
 
@@ -1197,6 +1328,9 @@ export async function unassignTask(taskId: number, assigneeId?: number, groupId?
       timestamp: new Date(),
       metadata: { assigneeId, groupId }
     }, updatedTask || undefined);
+
+    // Trigger API actions for task_unassigned event
+    await actionService.triggerApiActionsForEvent(taskId, TaskActionEvent.TASK_UNASSIGNED, updatedTask);
   }
 }
 
@@ -1217,7 +1351,7 @@ export async function escalateTask(taskId: number, userId?: number, notes?: stri
   const newLevel = task.EscalationLevel + 1;
 
   // Update task escalation
-  await prisma.task.update({
+  await prisma.tasks.update({
     where: { Id: taskId },
     data: {
       IsEscalated: true,
@@ -1233,7 +1367,7 @@ export async function escalateTask(taskId: number, userId?: number, notes?: stri
   }
 
   // Log escalation history
-  await prisma.escalationHistory.create({
+  await prisma.escalationhistory.create({
     data: {
       TaskId: taskId,
       PreviousLevel: task.EscalationLevel,
@@ -1254,6 +1388,9 @@ export async function escalateTask(taskId: number, userId?: number, notes?: stri
     timestamp: new Date(),
     metadata: { previousLevel: task.EscalationLevel, newLevel, notes, assignedTo: assignData }
   }, escalatedTask || undefined);
+
+  // Trigger API actions for task_escalated event
+  await actionService.triggerApiActionsForEvent(taskId, TaskActionEvent.TASK_ESCALATED, escalatedTask);
 }
 
 export async function checkAndProcessEscalations(): Promise<void> {
@@ -1270,7 +1407,7 @@ export async function checkAndProcessEscalations(): Promise<void> {
     )
   ` as any[];
 
-  const rules = await prisma.escalationRule.findMany({
+  const rules = await prisma.escalationrules.findMany({
     where: { IsActive: true }
   });
 
@@ -1296,7 +1433,7 @@ export async function checkAndProcessEscalations(): Promise<void> {
 
 async function escalateTaskByRule(taskId: number, rule: any): Promise<void> {
   // Update task
-  await prisma.task.update({
+  await prisma.tasks.update({
     where: { Id: taskId },
     data: {
       IsEscalated: true,
@@ -1306,7 +1443,7 @@ async function escalateTaskByRule(taskId: number, rule: any): Promise<void> {
   });
 
   // Log escalation
-  await prisma.escalationHistory.create({
+  await prisma.escalationhistory.create({
     data: {
       TaskId: taskId,
       NewLevel: rule.MaxEscalationLevel,
@@ -1349,11 +1486,19 @@ export async function getOverdueTasks(): Promise<TaskResponse[]> {
 
   // Mark tasks as overdue if not already processed
   for (const task of tasks) {
-    await logTaskEvent({
-      taskId: task.Id,
-      event: TASK_EVENTS.OVERDUE,
-      timestamp: new Date()
-    }, task);
+    // Check if overdue action already triggered
+    const alreadyTriggered = await actionService.hasEventBeenTriggered(task.Id, TaskActionEvent.TASK_OVERDUE);
+
+    if (!alreadyTriggered) {
+      await logTaskEvent({
+        taskId: task.Id,
+        event: TASK_EVENTS.OVERDUE,
+        timestamp: new Date()
+      }, task);
+
+      // Trigger task-specific API actions for task_overdue event
+      await actionService.triggerApiActionsForEvent(task.Id, TaskActionEvent.TASK_OVERDUE, task);
+    }
   }
 
   console.log(`📋 getOverdueTasks: Found ${tasks.length} task(s) overdue or due within ${DUE_TIME_INTERVAL_VALUE} ${DUE_TIME_INTERVAL_UNIT}(s)`);
@@ -1372,7 +1517,7 @@ export async function getDueTasks(): Promise<TaskResponse[]> {
     SELECT * FROM Tasks 
     WHERE IsDeleted = FALSE 
     AND StatusId != ? 
-    AND CONCAT(DueDate, ' ', DueTime) BETWEEN 
+    AND TIMESTAMP(DueDate, DueTime) BETWEEN 
         DATE_SUB(UTC_TIMESTAMP(), INTERVAL ? ${bufferUnit}) 
         AND DATE_ADD(UTC_TIMESTAMP(), INTERVAL ? ${windowUnit})
   `;
@@ -1384,6 +1529,60 @@ export async function getDueTasks(): Promise<TaskResponse[]> {
   }));
 
   console.log(`📋 getDueTasks: Found ${tasks.length} task(s) due within ${windowValue} ${windowUnit}(s) (with ${bufferValue} ${bufferUnit} buffer)`);
+
+  return tasks;
+}
+
+/**
+ * Get tasks that are about to start (based on StartDate/StartTime)
+ * Used to trigger task_started API actions
+ */
+export async function getStartingTasks(): Promise<TaskResponse[]> {
+  const settings = await getSchedulerSettings();
+  const windowValue = settings.dueTasksWindow.value;
+  const windowUnit = settings.dueTasksWindow.unit;
+  const bufferValue = settings.dueTasksBuffer.value;
+  const bufferUnit = settings.dueTasksBuffer.unit;
+
+  const query = `
+    SELECT * FROM Tasks 
+    WHERE IsDeleted = FALSE 
+    AND StatusId NOT IN (?, ?) 
+    AND StartDate IS NOT NULL 
+    AND StartTime IS NOT NULL
+    AND TIMESTAMP(StartDate, StartTime) BETWEEN 
+        DATE_SUB(UTC_TIMESTAMP(), INTERVAL ? ${bufferUnit}) 
+        AND DATE_ADD(UTC_TIMESTAMP(), INTERVAL ? ${windowUnit})
+  `;
+
+  const rows = await prisma.$queryRawUnsafe(query, TASK_STATUS.COMPLETED, TASK_STATUS.CANCELLED, bufferValue, windowValue) as any[];
+
+  const tasks = await Promise.all(rows.map(async (task: any) => {
+    return await enhanceTaskWithDetails(task);
+  }));
+
+  // Trigger API actions for task_started event
+  for (const task of tasks) {
+    // Check if started action already triggered
+    // Note: We use TASK_STARTED here which usually implies status change to In Progress,
+    // but in this context it means "Scheduled Start Time Reached".
+    const alreadyTriggered = await actionService.hasEventBeenTriggered(task.Id, TaskActionEvent.TASK_STARTED);
+
+    if (!alreadyTriggered) {
+      // We log a custom event or reuse STARTED
+      await logTaskEvent({
+        taskId: task.Id,
+        event: TASK_EVENTS.STARTED,
+        timestamp: new Date(),
+        metadata: { reason: 'scheduled_start_time_reached' }
+      }, task);
+
+      // Trigger API actions for task_started event
+      // await actionService.triggerApiActionsForEvent(task.Id, TaskActionEvent.TASK_STARTED, task);
+    }
+  }
+
+  console.log(`📋 getStartingTasks: Found ${tasks.length} task(s) starting within ${windowValue} ${windowUnit}(s) (with ${bufferValue} ${bufferUnit} buffer)`);
 
   return tasks;
 }
@@ -1429,7 +1628,7 @@ async function logTaskEvent(eventData: TaskEventData, taskSnapshot?: TaskRespons
 
   try {
     const snapshot = taskSnapshot ?? (await getTaskById(eventData.taskId));
-    await publishTaskEvent(eventData, snapshot || undefined);
+    await publishTaskEvent(eventData, eventData.event);
   } catch (error) {
     console.error('Failed to dispatch task event:', error);
   }

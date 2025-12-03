@@ -46,7 +46,7 @@ export async function createRecurrenceRule(recurrenceData: CreateRecurrenceDto):
   }
 
   // Create main recurrence rule
-  const recurrenceRule = await prisma.recurrenceRule.create({
+  const recurrenceRule = await prisma.recurrencerules.create({
     data: {
       RecurrenceType: recurrenceData.recurrenceType as any,
       EndDate: recurrenceData.endDate ? new Date(recurrenceData.endDate) : null,
@@ -60,7 +60,7 @@ export async function createRecurrenceRule(recurrenceData: CreateRecurrenceDto):
 }
 
 async function createDailyRule(dailyRule: NonNullable<CreateRecurrenceDto['dailyRule']>): Promise<number> {
-  const rule = await prisma.repeatDailyRule.create({
+  const rule = await prisma.repeat_dailyrules.create({
     data: {
       RecurEveryXDays: dailyRule.recurEveryXDays,
       IntraDayFrequencyType: dailyRule.intraDayFrequencyType as any,
@@ -71,7 +71,7 @@ async function createDailyRule(dailyRule: NonNullable<CreateRecurrenceDto['daily
 }
 
 async function createWeeklyRule(weeklyRule: NonNullable<CreateRecurrenceDto['weeklyRule']>): Promise<number> {
-  const rule = await prisma.repeatWeeklyRule.create({
+  const rule = await prisma.repeat_weeklyrules.create({
     data: {
       RecurEveryNWeeks: weeklyRule.recurEveryNWeeks,
       OnSunday: weeklyRule.daysOfWeek.sunday || false,
@@ -88,7 +88,7 @@ async function createWeeklyRule(weeklyRule: NonNullable<CreateRecurrenceDto['wee
 
 async function createMonthlyRule(monthlyRule: NonNullable<CreateRecurrenceDto['monthlyRule']>): Promise<number> {
   // Create base monthly rule
-  const rule = await prisma.repeatMonthlyRule.create({
+  const rule = await prisma.repeat_monthlyrules.create({
     data: {
       RuleType: monthlyRule.ruleType as any
     }
@@ -101,7 +101,7 @@ async function createMonthlyRule(monthlyRule: NonNullable<CreateRecurrenceDto['m
     : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
   for (const month of months) {
-    await prisma.repeatMonthlyRuleMonth.create({
+    await prisma.repeat_monthlyrule_months.create({
       data: {
         MonthlyRuleId: monthlyRuleId,
         MonthNumber: month
@@ -112,7 +112,7 @@ async function createMonthlyRule(monthlyRule: NonNullable<CreateRecurrenceDto['m
   // Add specific day numbers or ordinals based on rule type
   if (monthlyRule.ruleType === 'BY_DAY_OF_MONTH' && monthlyRule.dayNumbers) {
     for (const dayNumber of monthlyRule.dayNumbers) {
-      await prisma.repeatMonthlyRuleDay.create({
+      await prisma.repeat_monthlyrule_days.create({
         data: {
           MonthlyRuleId: monthlyRuleId,
           DayNumber: dayNumber
@@ -121,7 +121,7 @@ async function createMonthlyRule(monthlyRule: NonNullable<CreateRecurrenceDto['m
     }
   } else if (monthlyRule.ruleType === 'BY_ORDINAL_DAY_OF_WEEK' && monthlyRule.ordinals) {
     for (const ordinal of monthlyRule.ordinals) {
-      await prisma.repeatMonthlyRuleOrdinal.create({
+      await prisma.repeat_monthlyrule_ordinals.create({
         data: {
           MonthlyRuleId: monthlyRuleId,
           Ordinal: ordinal.ordinal as any,
@@ -140,16 +140,16 @@ async function createMonthlyRule(monthlyRule: NonNullable<CreateRecurrenceDto['m
 
 export async function getRecurrenceById(recurrenceId: number): Promise<RecurrenceResponse | null> {
   // Get main recurrence rule
-  const recurrence = await prisma.recurrenceRule.findUnique({
+  const recurrence = await prisma.recurrencerules.findUnique({
     where: { Id: recurrenceId },
     include: {
-      DailyRule: true,
-      WeeklyRule: true,
-      MonthlyRule: {
+      repeat_dailyrules: true,
+      repeat_weeklyrules: true,
+      repeat_monthlyrules: {
         include: {
-          Months: true,
-          Days: true,
-          Ordinals: true
+          repeat_monthlyrule_months: true,
+          repeat_monthlyrule_days: true,
+          repeat_monthlyrule_ordinals: true
         }
       }
     }
@@ -168,46 +168,46 @@ export async function getRecurrenceById(recurrenceId: number): Promise<Recurrenc
   // Get specific rule details based on type
   switch (recurrence.RecurrenceType) {
     case 'DAILY':
-      if (recurrence.DailyRule) {
+      if (recurrence.repeat_dailyrules) {
         response.dailyRule = {
-          Id: Number(recurrence.DailyRule.Id),
-          RecurEveryXDays: recurrence.DailyRule.RecurEveryXDays,
-          IntraDayFrequencyType: recurrence.DailyRule.IntraDayFrequencyType || undefined,
-          IntraDayInterval: recurrence.DailyRule.IntraDayInterval || undefined
+          Id: Number(recurrence.repeat_dailyrules.Id),
+          RecurEveryXDays: recurrence.repeat_dailyrules.RecurEveryXDays,
+          IntraDayFrequencyType: recurrence.repeat_dailyrules.IntraDayFrequencyType || undefined,
+          IntraDayInterval: recurrence.repeat_dailyrules.IntraDayInterval || undefined
         };
       }
       break;
 
     case 'WEEKLY':
-      if (recurrence.WeeklyRule) {
+      if (recurrence.repeat_weeklyrules) {
         response.weeklyRule = {
-          Id: Number(recurrence.WeeklyRule.Id),
-          RecurEveryNWeeks: recurrence.WeeklyRule.RecurEveryNWeeks,
-          OnSunday: recurrence.WeeklyRule.OnSunday,
-          OnMonday: recurrence.WeeklyRule.OnMonday,
-          OnTuesday: recurrence.WeeklyRule.OnTuesday,
-          OnWednesday: recurrence.WeeklyRule.OnWednesday,
-          OnThursday: recurrence.WeeklyRule.OnThursday,
-          OnFriday: recurrence.WeeklyRule.OnFriday,
-          OnSaturday: recurrence.WeeklyRule.OnSaturday
+          Id: Number(recurrence.repeat_weeklyrules.Id),
+          RecurEveryNWeeks: recurrence.repeat_weeklyrules.RecurEveryNWeeks,
+          OnSunday: recurrence.repeat_weeklyrules.OnSunday,
+          OnMonday: recurrence.repeat_weeklyrules.OnMonday,
+          OnTuesday: recurrence.repeat_weeklyrules.OnTuesday,
+          OnWednesday: recurrence.repeat_weeklyrules.OnWednesday,
+          OnThursday: recurrence.repeat_weeklyrules.OnThursday,
+          OnFriday: recurrence.repeat_weeklyrules.OnFriday,
+          OnSaturday: recurrence.repeat_weeklyrules.OnSaturday
         };
       }
       break;
 
     case 'MONTHLY':
-      if (recurrence.MonthlyRule) {
+      if (recurrence.repeat_monthlyrules) {
         response.monthlyRule = {
-          Id: Number(recurrence.MonthlyRule.Id),
-          RuleType: recurrence.MonthlyRule.RuleType,
-          months: recurrence.MonthlyRule.Months.map(m => ({
+          Id: Number(recurrence.repeat_monthlyrules.Id),
+          RuleType: recurrence.repeat_monthlyrules.RuleType,
+          months: recurrence.repeat_monthlyrules.repeat_monthlyrule_months.map(m => ({
             MonthlyRuleId: Number(m.MonthlyRuleId),
             MonthNumber: m.MonthNumber
           })),
-          dayNumbers: recurrence.MonthlyRule.Days.map(d => ({
+          dayNumbers: recurrence.repeat_monthlyrules.repeat_monthlyrule_days.map(d => ({
             MonthlyRuleId: Number(d.MonthlyRuleId),
             DayNumber: d.DayNumber
           })),
-          ordinals: recurrence.MonthlyRule.Ordinals.map(o => ({
+          ordinals: recurrence.repeat_monthlyrules.repeat_monthlyrule_ordinals.map(o => ({
             MonthlyRuleId: Number(o.MonthlyRuleId),
             Ordinal: o.Ordinal,
             DayOfWeek: o.DayOfWeek
@@ -221,7 +221,7 @@ export async function getRecurrenceById(recurrenceId: number): Promise<Recurrenc
 }
 
 async function getDailyRule(dailyRuleId: number): Promise<DailyRule> {
-  const rule = await prisma.repeatDailyRule.findUnique({
+  const rule = await prisma.repeat_dailyrules.findUnique({
     where: { Id: dailyRuleId }
   });
   if (!rule) throw new Error('Daily rule not found');
@@ -234,7 +234,7 @@ async function getDailyRule(dailyRuleId: number): Promise<DailyRule> {
 }
 
 async function getWeeklyRule(weeklyRuleId: number): Promise<WeeklyRule> {
-  const rule = await prisma.repeatWeeklyRule.findUnique({
+  const rule = await prisma.repeat_weeklyrules.findUnique({
     where: { Id: weeklyRuleId }
   });
   if (!rule) throw new Error('Weekly rule not found');
@@ -256,28 +256,28 @@ async function getMonthlyRule(monthlyRuleId: number): Promise<MonthlyRule & {
   dayNumbers?: MonthlyRuleDay[];
   ordinals?: MonthlyRuleOrdinal[];
 }> {
-  const rule = await prisma.repeatMonthlyRule.findUnique({
+  const rule = await prisma.repeat_monthlyrules.findUnique({
     where: { Id: monthlyRuleId },
     include: {
-      Months: true,
-      Days: true,
-      Ordinals: true
+      repeat_monthlyrule_months: true,
+      repeat_monthlyrule_days: true,
+      repeat_monthlyrule_ordinals: true
     }
   });
   if (!rule) throw new Error('Monthly rule not found');
 
-  return {
+    return {
     Id: Number(rule.Id),
     RuleType: rule.RuleType,
-    months: rule.Months.map(m => ({
+    months: rule.repeat_monthlyrule_months.map(m => ({
       MonthlyRuleId: Number(m.MonthlyRuleId),
       MonthNumber: m.MonthNumber
     })),
-    dayNumbers: rule.Days.map(d => ({
+    dayNumbers: rule.repeat_monthlyrule_days.map(d => ({
       MonthlyRuleId: Number(d.MonthlyRuleId),
       DayNumber: d.DayNumber
     })),
-    ordinals: rule.Ordinals.map(o => ({
+    ordinals: rule.repeat_monthlyrule_ordinals.map(o => ({
       MonthlyRuleId: Number(o.MonthlyRuleId),
       Ordinal: o.Ordinal,
       DayOfWeek: o.DayOfWeek
@@ -291,12 +291,12 @@ async function getMonthlyRule(monthlyRuleId: number): Promise<MonthlyRule & {
 
 export async function updateRecurrenceRule(recurrenceId: number, recurrenceData: CreateRecurrenceDto): Promise<void> {
   // Get current recurrence rule
-  const currentRule = await prisma.recurrenceRule.findUnique({
+  const currentRule = await prisma.recurrencerules.findUnique({
     where: { Id: recurrenceId },
     include: {
-      DailyRule: true,
-      WeeklyRule: true,
-      MonthlyRule: true
+      repeat_dailyrules: true,
+      repeat_weeklyrules: true,
+      repeat_monthlyrules: true
     }
   });
 
@@ -305,16 +305,16 @@ export async function updateRecurrenceRule(recurrenceId: number, recurrenceData:
   }
 
   // Delete old specific rules
-  if (currentRule.DailyRule) {
-    await prisma.repeatDailyRule.delete({
-      where: { Id: currentRule.DailyRule.Id }
+  if (currentRule.repeat_dailyrules) {
+    await prisma.repeat_dailyrules.delete({
+      where: { Id: currentRule.repeat_dailyrules.Id }
     });
   }
-  if (currentRule.WeeklyRule) {
-    await deleteMonthlyRulePrisma(currentRule.WeeklyRule.Id);
+  if (currentRule.repeat_weeklyrules) {
+    await deleteWeeklyRulePrisma(currentRule.repeat_weeklyrules.Id);
   }
-  if (currentRule.MonthlyRule) {
-    await deleteMonthlyRulePrisma(currentRule.MonthlyRule.Id);
+  if (currentRule.repeat_monthlyrules) {
+    await deleteMonthlyRulePrisma(currentRule.repeat_monthlyrules.Id);
   }
 
   // Create new specific rules
@@ -327,7 +327,7 @@ export async function updateRecurrenceRule(recurrenceId: number, recurrenceData:
       if (!recurrenceData.dailyRule) {
         throw new Error('Daily rule configuration is required for DAILY recurrence');
       }
-      const dailyRule = await prisma.repeatDailyRule.create({
+      const dailyRule = await prisma.repeat_dailyrules.create({
         data: {
           RecurEveryXDays: recurrenceData.dailyRule.recurEveryXDays,
           IntraDayFrequencyType: recurrenceData.dailyRule.intraDayFrequencyType,
@@ -341,7 +341,7 @@ export async function updateRecurrenceRule(recurrenceId: number, recurrenceData:
       if (!recurrenceData.weeklyRule) {
         throw new Error('Weekly rule configuration is required for WEEKLY recurrence');
       }
-      const weeklyRule = await prisma.repeatWeeklyRule.create({
+      const weeklyRule = await prisma.repeat_weeklyrules.create({
         data: {
           RecurEveryNWeeks: recurrenceData.weeklyRule.recurEveryNWeeks,
           OnSunday: recurrenceData.weeklyRule.daysOfWeek.sunday,
@@ -366,7 +366,7 @@ export async function updateRecurrenceRule(recurrenceId: number, recurrenceData:
   }
 
   // Update main recurrence rule
-  await prisma.recurrenceRule.update({
+  await prisma.recurrencerules.update({
     where: { Id: recurrenceId },
     data: {
       RecurrenceType: recurrenceData.recurrenceType,
@@ -380,22 +380,22 @@ export async function updateRecurrenceRule(recurrenceId: number, recurrenceData:
 
 async function deleteMonthlyRulePrisma(monthlyRuleId: bigint): Promise<void> {
   // Delete related records first due to foreign key constraints
-  await prisma.repeatMonthlyRuleMonth.deleteMany({
+  await prisma.repeat_monthlyrule_months.deleteMany({
     where: { MonthlyRuleId: monthlyRuleId }
   });
-  await prisma.repeatMonthlyRuleDay.deleteMany({
+  await prisma.repeat_monthlyrule_days.deleteMany({
     where: { MonthlyRuleId: monthlyRuleId }
   });
-  await prisma.repeatMonthlyRuleOrdinal.deleteMany({
+  await prisma.repeat_monthlyrule_ordinals.deleteMany({
     where: { MonthlyRuleId: monthlyRuleId }
   });
-  await prisma.repeatMonthlyRule.delete({
+  await prisma.repeat_monthlyrules.delete({
     where: { Id: monthlyRuleId }
   });
 }
 
 async function createMonthlyRulePrisma(monthlyRuleData: any): Promise<any> {
-  const monthlyRule = await prisma.repeatMonthlyRule.create({
+  const monthlyRule = await prisma.repeat_monthlyrules.create({
     data: {
       RuleType: monthlyRuleData.ruleType
     }
@@ -403,7 +403,7 @@ async function createMonthlyRulePrisma(monthlyRuleData: any): Promise<any> {
 
   // Create months if provided
   if (monthlyRuleData.months) {
-    await prisma.repeatMonthlyRuleMonth.createMany({
+    await prisma.repeat_monthlyrule_months.createMany({
       data: monthlyRuleData.months.map((month: number) => ({
         MonthlyRuleId: monthlyRule.Id,
         MonthNumber: month
@@ -413,14 +413,14 @@ async function createMonthlyRulePrisma(monthlyRuleData: any): Promise<any> {
 
   // Create days or ordinals based on rule type
   if (monthlyRuleData.ruleType === 'BY_DAY_OF_MONTH' && monthlyRuleData.dayNumbers) {
-    await prisma.repeatMonthlyRuleDay.createMany({
+    await prisma.repeat_monthlyrule_days.createMany({
       data: monthlyRuleData.dayNumbers.map((day: number) => ({
         MonthlyRuleId: monthlyRule.Id,
         DayNumber: day
       }))
     });
   } else if (monthlyRuleData.ruleType === 'BY_ORDINAL_DAY_OF_WEEK' && monthlyRuleData.ordinals) {
-    await prisma.repeatMonthlyRuleOrdinal.createMany({
+    await prisma.repeat_monthlyrule_ordinals.createMany({
       data: monthlyRuleData.ordinals.map((ordinal: any) => ({
         MonthlyRuleId: monthlyRule.Id,
         Ordinal: ordinal.ordinal,
@@ -438,12 +438,12 @@ async function createMonthlyRulePrisma(monthlyRuleData: any): Promise<any> {
 
 export async function deleteRecurrenceRule(recurrenceId: number): Promise<void> {
   // Get current recurrence rule
-  const currentRule = await prisma.recurrenceRule.findUnique({
+  const currentRule = await prisma.recurrencerules.findUnique({
     where: { Id: recurrenceId },
     include: {
-      DailyRule: true,
-      WeeklyRule: true,
-      MonthlyRule: true
+      repeat_dailyrules: true,
+      repeat_weeklyrules: true,
+      repeat_monthlyrules: true
     }
   });
 
@@ -452,22 +452,22 @@ export async function deleteRecurrenceRule(recurrenceId: number): Promise<void> 
   }
 
   // Delete specific rules
-  if (currentRule.DailyRule) {
-    await prisma.repeatDailyRule.delete({
-      where: { Id: currentRule.DailyRule.Id }
+  if (currentRule.repeat_dailyrules) {
+    await prisma.repeat_dailyrules.delete({
+      where: { Id: currentRule.repeat_dailyrules.Id }
     });
   }
-  if (currentRule.WeeklyRule) {
-    await prisma.repeatWeeklyRule.delete({
-      where: { Id: currentRule.WeeklyRule.Id }
+  if (currentRule.repeat_weeklyrules) {
+    await prisma.repeat_weeklyrules.delete({
+      where: { Id: currentRule.repeat_weeklyrules.Id }
     });
   }
-  if (currentRule.MonthlyRule) {
-    await deleteMonthlyRulePrisma(currentRule.MonthlyRule.Id);
+  if (currentRule.repeat_monthlyrules) {
+    await deleteMonthlyRulePrisma(currentRule.repeat_monthlyrules.Id);
   }
 
   // Delete main recurrence rule
-  await prisma.recurrenceRule.delete({
+  await prisma.recurrencerules.delete({
     where: { Id: recurrenceId }
   });
 }
@@ -553,4 +553,10 @@ export function validateRecurrenceData(recurrenceData: CreateRecurrenceDto): { i
     isValid: errors.length === 0,
     errors
   };
+}
+
+async function deleteWeeklyRulePrisma(weeklyRuleId: bigint): Promise<void> {
+  await prisma.repeat_weeklyrules.delete({
+    where: { Id: weeklyRuleId }
+  });
 }
