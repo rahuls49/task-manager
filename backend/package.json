@@ -14,7 +14,7 @@
   "license": "ISC",
   "packageManager": "pnpm@10.18.1",
   "dependencies": {
-    "@prisma/client": "^6.19.0",
+    "@task-manager/prisma-client": "workspace:*",
     "@task-manager/event-lib": "workspace:*",
     "@task-manager/queue-lib": "workspace:*",
     "@task-manager/rescheduler-lib": "workspace:*",

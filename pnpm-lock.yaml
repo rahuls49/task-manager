@@ -18,12 +18,12 @@ importers:
 
   backend:
     dependencies:
-      '@prisma/client':
-        specifier: ^6.19.0
-        version: 6.19.0(prisma@6.19.0(typescript@5.9.3))(typescript@5.9.3)
       '@task-manager/event-lib':
         specifier: workspace:*
         version: link:../packages/event-lib
+      '@task-manager/prisma-client':
+        specifier: workspace:*
+        version: link:../packages/prisma-client
       '@task-manager/queue-lib':
         specifier: workspace:*
         version: link:../packages/queue-lib
@@ -238,8 +238,24 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
+  packages/prisma-client:
+    dependencies:
+      '@prisma/client':
+        specifier: ^6.19.0
+        version: 6.19.0(prisma@6.19.0(typescript@5.9.3))(typescript@5.9.3)
+    devDependencies:
+      prisma:
+        specifier: 6.19.0
+        version: 6.19.0(typescript@5.9.3)
+
   packages/queue-lib:
     dependencies:
+      '@task-manager/prisma-client':
+        specifier: workspace:*
+        version: link:../prisma-client
+      axios:
+        specifier: ^1.7.9
+        version: 1.13.2
       bullmq:
         specifier: ^5.61.2
         version: 5.61.2
@@ -262,6 +278,9 @@ importers:
       '@task-manager/event-lib':
         specifier: workspace:*
         version: link:../event-lib
+      '@task-manager/prisma-client':
+        specifier: workspace:*
+        version: link:../prisma-client
       dotenv:
         specifier: ^17.2.3
         version: 17.2.3

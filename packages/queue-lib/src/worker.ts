@@ -1,6 +1,10 @@
 import { Worker } from 'bullmq';
 import connection from './redis';
 import 'dotenv/config';
+import axios from 'axios';
+import { PrismaClient } from '@task-manager/prisma-client';
+
+const prisma = new PrismaClient();
 
 console.log("Worker starting...");
 
@@ -94,6 +98,91 @@ specificHooksWorker.on('failed', (job, err) => {
 specificHooksWorker.on('error', (err) => {
   console.error('Specific hooks worker error:', err);
 });
+
+const apiExecutionWorker = new Worker('api-execution', async job => {
+  const { actionDefinitionId, contextData } = job.data;
+
+  try {
+    // Fetch the full ApiActionDefinition
+    const definition = await prisma.apiActionDefinition.findUnique({
+      where: { id: actionDefinitionId },
+    });
+
+    if (!definition) {
+      throw new Error(`ApiActionDefinition with id ${actionDefinitionId} not found`);
+    }
+
+    // Perform variable substitution in payloadTemplate
+    let payload = definition.payloadTemplate;
+    if (payload) {
+      payload = replaceTemplateVariables(payload, contextData);
+    }
+
+    // Construct the HTTP request
+    const config: any = {
+      method: definition.method,
+      url: definition.url,
+      headers: definition.headers || {},
+    };
+
+    if (['POST', 'PUT', 'PATCH'].includes(definition.method) && payload) {
+      config.data = payload;
+    } else if (['GET', 'DELETE'].includes(definition.method) && payload) {
+      config.params = payload;
+    }
+
+    const startTime = Date.now();
+
+    // Make the request
+    const response = await axios(config);
+    const durationMs = Date.now() - startTime;
+
+    // Log success
+    await prisma.apiExecutionLog.create({
+      data: {
+        apiActionDefinitionId: definition.id,
+        executedAt: new Date(),
+        durationMs,
+        responseStatus: response.status,
+        responseBody: response.data,
+        status: 'SUCCESS',
+      },
+    });
+
+    console.log(`✅ API execution successful for definition ${actionDefinitionId}, status: ${response.status}`);
+    return { success: true, status: response.status, data: response.data };
+
+  } catch (error: any) {
+    const durationMs = 0; // Could calculate if needed
+
+    // Log failure
+    await prisma.apiExecutionLog.create({
+      data: {
+        apiActionDefinitionId: actionDefinitionId,
+        executedAt: new Date(),
+        durationMs,
+        responseStatus: error.response?.status || null,
+        responseBody: error.response?.data || null,
+        status: 'FAILURE',
+      },
+    });
+
+    console.error(`❌ API execution failed for definition ${actionDefinitionId}:`, error.message);
+    throw error; // Re-throw for BullMQ retry
+  }
+}, { connection, concurrency: 10 });
+
+apiExecutionWorker.on('completed', job => {
+  console.log(`API execution job ${job.id} completed`);
+});
+
+apiExecutionWorker.on('failed', (job, err) => {
+  console.error(`API execution job ${job?.id} failed with ${err.message}`);
+});
+
+apiExecutionWorker.on('error', (err) => {
+  console.error('API execution worker error:', err);
+});
 async function triggerTaskActions(taskId: number, event: string, taskData: any) {
   try {
     const response = await fetch(`${BACKEND_API_BASE_URL}/system/tasks/trigger-actions`, {
@@ -133,4 +222,24 @@ async function sendWhatsappMessage(job: any) {
       "message": `This task is overdue: ${job.data.Title}`
     })
   })
+}
+
+function replaceTemplateVariables(template: any, data: any): any {
+  if (typeof template === 'string') {
+    return template.replace(/\{\{(\w+(?:\.\w+)*)\}\}/g, (match, path) => {
+      const value = getNestedValue(data, path);
+      return value !== undefined ? String(value) : match;
+    });
+  }
+  if (Array.isArray(template)) return template.map(item => replaceTemplateVariables(item, data));
+  if (typeof template === 'object' && template !== null) {
+    const result: any = {};
+    for (const key in template) result[key] = replaceTemplateVariables(template[key], data);
+    return result;
+  }
+  return template;
+}
+
+function getNestedValue(obj: any, path: string) {
+  return path.split('.').reduce((current: any, key: string) => current && current[key] !== undefined ? current[key] : undefined, obj);
 }

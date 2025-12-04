@@ -13,6 +13,8 @@
   "license": "ISC",
   "packageManager": "pnpm@10.18.1",
   "dependencies": {
+    "@task-manager/prisma-client": "workspace:*",
+    "axios": "^1.7.9",
     "bullmq": "^5.61.2",
     "dotenv": "^17.2.3",
     "ioredis": "^5.8.2"
