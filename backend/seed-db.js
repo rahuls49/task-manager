@@ -33,7 +33,7 @@ async function seedDatabase() {
 
     // Insert default task statuses
     console.log('📝 Seeding task statuses...');
-    await prisma.taskStatus.createMany({
+    await prisma.taskstatus.createMany({
       data: [
         { Id: 1, StatusName: 'To Do' },
         { Id: 2, StatusName: 'In Progress' },
@@ -50,7 +50,7 @@ async function seedDatabase() {
 
     // Insert default task priorities
     console.log('🎯 Seeding task priorities...');
-    await prisma.taskPriority.createMany({
+    await prisma.taskpriority.createMany({
       data: [
         { Id: 1, PriorityName: 'Low' },
         { Id: 2, PriorityName: 'Medium' },
@@ -63,7 +63,7 @@ async function seedDatabase() {
 
     // Insert task types
     console.log('📋 Seeding task types...');
-    await prisma.taskType.createMany({
+    await prisma.tasktype.createMany({
       data: [
         {
           Id: 1,
@@ -103,7 +103,7 @@ async function seedDatabase() {
     console.log('🔗 Seeding task type statuses...');
 
     // Development Task (Sequential): To Do -> In Progress -> Under Review -> Completed
-    await prisma.taskTypeStatus.createMany({
+    await prisma.tasktypestatuses.createMany({
       data: [
         { TaskTypeId: 1, StatusId: 1, OrderIndex: 1 }, // To Do
         { TaskTypeId: 1, StatusId: 2, OrderIndex: 2 }, // In Progress
@@ -114,7 +114,7 @@ async function seedDatabase() {
     });
 
     // Bug Fix (Sequential): To Do -> In Progress -> Under Review -> Completed
-    await prisma.taskTypeStatus.createMany({
+    await prisma.tasktypestatuses.createMany({
       data: [
         { TaskTypeId: 2, StatusId: 1, OrderIndex: 1 }, // To Do
         { TaskTypeId: 2, StatusId: 2, OrderIndex: 2 }, // In Progress
@@ -125,7 +125,7 @@ async function seedDatabase() {
     });
 
     // Meeting (Sequential): To Do -> In Progress -> Completed
-    await prisma.taskTypeStatus.createMany({
+    await prisma.tasktypestatuses.createMany({
       data: [
         { TaskTypeId: 4, StatusId: 1, OrderIndex: 1 }, // To Do
         { TaskTypeId: 4, StatusId: 2, OrderIndex: 2 }, // In Progress
@@ -138,7 +138,7 @@ async function seedDatabase() {
     console.log('🔄 Seeding status transition rules...');
 
     // Design Review (Random): Flexible transitions
-    await prisma.statusTransitionRule.createMany({
+    await prisma.statustransitionrules.createMany({
       data: [
         { TaskTypeId: 3, FromStatusId: 1, ToStatusId: 2 }, // To Do -> In Progress
         { TaskTypeId: 3, FromStatusId: 1, ToStatusId: 8 }, // To Do -> Pending Approval
@@ -154,7 +154,7 @@ async function seedDatabase() {
     });
 
     // Research (Random): Flexible transitions
-    await prisma.statusTransitionRule.createMany({
+    await prisma.statustransitionrules.createMany({
       data: [
         { TaskTypeId: 5, FromStatusId: 1, ToStatusId: 2 }, // To Do -> In Progress
         { TaskTypeId: 5, FromStatusId: 1, ToStatusId: 6 }, // To Do -> On Hold
@@ -173,7 +173,7 @@ async function seedDatabase() {
 
     // Insert assignees (users)
     console.log('👥 Seeding assignees...');
-    await prisma.assignee.createMany({
+    await prisma.assignees.createMany({
       data: [
         {
           Id: 1,
@@ -223,7 +223,7 @@ async function seedDatabase() {
 
     // Insert groups
     console.log('👥 Seeding groups...');
-    await prisma.groupMaster.createMany({
+    await prisma.groupmaster.createMany({
       data: [
         {
           GroupId: 1,
@@ -261,7 +261,7 @@ async function seedDatabase() {
 
     // Insert user-group memberships
     console.log('🔗 Seeding user-group memberships...');
-    await prisma.userGroupMember.createMany({
+    await prisma.usergroupmembers.createMany({
       data: [
         // Development Team
         { GroupId: 1, UserId: 1 }, // John Doe
