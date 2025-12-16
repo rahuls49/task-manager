@@ -1,4 +1,5 @@
 import prisma from "../../lib/connection";
+import { rbacClient, RbacUser } from "../../lib/rbac-client";
 import { DEFAULT_TASK_STATUSES, DEFAULT_TASK_PRIORITIES } from "./task.constants";
 // import { RowDataPacket, ResultSetHeader } from 'mysql2';
 
@@ -26,14 +27,14 @@ export async function initializeTaskSystem(): Promise<void> {
  */
 async function initializeTaskStatuses(): Promise<void> {
   console.log('Setting up default task statuses...');
-  
+
   for (const status of DEFAULT_TASK_STATUSES) {
     try {
       // Check if status already exists
       const existing = await prisma.taskstatus.count({
         where: { StatusName: status.StatusName }
       });
-      
+
       if (existing === 0) {
         await prisma.taskstatus.create({
           data: { StatusName: status.StatusName }
@@ -51,14 +52,14 @@ async function initializeTaskStatuses(): Promise<void> {
  */
 async function initializeTaskPriorities(): Promise<void> {
   console.log('Setting up default task priorities...');
-  
+
   for (const priority of DEFAULT_TASK_PRIORITIES) {
     try {
       // Check if priority already exists
       const existing = await prisma.taskpriority.count({
         where: { PriorityName: priority.PriorityName }
       });
-      
+
       if (existing === 0) {
         await prisma.taskpriority.create({
           data: { PriorityName: priority.PriorityName }
@@ -76,7 +77,7 @@ async function initializeTaskPriorities(): Promise<void> {
  */
 async function initializeEscalationRules(): Promise<void> {
   console.log('Setting up default escalation rules...');
-  
+
   const defaultRules = [
     {
       Name: 'Overdue Tasks - 1 Day',
@@ -106,16 +107,16 @@ async function initializeEscalationRules(): Promise<void> {
       IsActive: true
     }
   ];
-  
+
   for (const rule of defaultRules) {
     try {
       // Check if rule already exists
       const existing = await prisma.escalationrules.count({
         where: { Name: rule.Name }
       });
-      
+
       if (existing === 0) {
-      await prisma.escalationrules.create({
+        await prisma.escalationrules.create({
           data: {
             Name: rule.Name,
             ConditionType: rule.ConditionType,
@@ -251,9 +252,44 @@ export async function createTaskPriority(priorityName: string): Promise<number> 
 }
 
 /**
- * Get all assignees or search by name/email
+ * Get all assignees (users) from RBAC service or search by name/email
+ * Falls back to Prisma if RBAC service is unavailable
  */
 export async function getAssignees(search?: string): Promise<any[]> {
+  // Try to fetch from RBAC service first
+  if (rbacClient.isReady()) {
+    try {
+      const response = await rbacClient.getAllUsers();
+      if (response.success && response.data) {
+        let users = response.data.map(user => ({
+          Id: user.id,
+          Name: user.name || user.username || user.email, // Use name, fallback to username or email
+          Email: user.email,
+          Phone: user.mobileNo || ''
+        }));
+
+        // Apply search filter if provided
+        if (search) {
+          const searchLower = search.toLowerCase();
+          users = users.filter(user =>
+            user.Name?.toLowerCase().includes(searchLower) ||
+            user.Email.toLowerCase().includes(searchLower)
+          );
+        }
+
+        // Sort by name
+        users.sort((a, b) => (a.Name || '').localeCompare(b.Name || ''));
+
+        console.log(`[Task Init] Fetched ${users.length} users from RBAC service`);
+        return users;
+      }
+    } catch (error) {
+      console.warn('[Task Init] Failed to fetch users from RBAC service, falling back to Prisma:', error);
+    }
+  }
+
+  // Fallback to Prisma database
+  console.log('[Task Init] Using Prisma database for assignees');
   const whereClause = search ? {
     OR: [
       { Name: { contains: search } },
@@ -288,9 +324,37 @@ export async function getGroups(): Promise<any[]> {
 }
 
 /**
- * Create a new assignee
+ * Create a new assignee (user) in RBAC service
+ * Falls back to Prisma if RBAC service is unavailable
  */
 export async function createAssignee(name: string, email: string, phone: string): Promise<number> {
+  // Try to create in RBAC service first
+  if (rbacClient.isReady()) {
+    try {
+      // Generate a temporary password for the new user
+      const tempPassword = `TempPass_${Date.now()}!`;
+
+      const response = await rbacClient.createUser({
+        name: name,
+        email: email,
+        mobileNo: phone,
+        rawPassword: tempPassword
+      });
+
+      if (response.success && response.data) {
+        console.log(`[Task Init] Created user ${name} in RBAC service with ID ${response.data.id}`);
+        return response.data.id;
+      } else {
+        throw new Error(response.message || 'Failed to create user in RBAC service');
+      }
+    } catch (error) {
+      console.error('[Task Init] Failed to create user in RBAC service:', error);
+      throw error;
+    }
+  }
+
+  // Fallback to Prisma database
+  console.log('[Task Init] Using Prisma database to create assignee');
   const assignee = await prisma.assignees.create({
     data: { Name: name, Email: email, Phone: phone }
   });
@@ -302,9 +366,9 @@ export async function createAssignee(name: string, email: string, phone: string)
  */
 export async function createGroup(groupName: string, parentId?: number): Promise<number> {
   const group = await prisma.groupmaster.create({
-    data: { 
-      GroupName: groupName, 
-      ParentId: parentId ? BigInt(parentId) : null 
+    data: {
+      GroupName: groupName,
+      ParentId: parentId ? BigInt(parentId) : null
     }
   });
   return Number(group.GroupId);

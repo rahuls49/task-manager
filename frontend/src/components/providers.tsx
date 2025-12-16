@@ -3,6 +3,7 @@
 import { SessionProvider } from "next-auth/react";
 import { ReactNode } from "react";
 import StoreProvider from "@/app/StoreProvider";
+import { RBACProvider } from "@/lib/rbac";
 
 interface ProvidersProps {
   children: ReactNode;
@@ -11,9 +12,11 @@ interface ProvidersProps {
 export default function Providers({ children }: ProvidersProps) {
   return (
     <SessionProvider>
-      <StoreProvider>
-        {children}
-      </StoreProvider>
+      <RBACProvider>
+        <StoreProvider>
+          {children}
+        </StoreProvider>
+      </RBACProvider>
     </SessionProvider>
   );
 }

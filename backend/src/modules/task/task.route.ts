@@ -1,13 +1,19 @@
 import { Router } from "express";
 import multer from 'multer';
 import verifyAuthToken from "../../middlewares/auth-middleware";
-import { 
-  createTask, 
-  getTasks, 
-  getTaskById, 
+import {
+  requirePermission,
+  requireAnyPermission,
+  loadUserPermissions
+} from "../../middlewares/rbac-middleware";
+import { RESOURCES, OPERATIONS } from "../../lib/rbac-constants";
+import {
+  createTask,
+  getTasks,
+  getTaskById,
   getTaskStatusHistory,
-  updateTask, 
-  deleteTask, 
+  updateTask,
+  deleteTask,
   importFromCsv,
   assignTask,
   unassignTask,
@@ -27,6 +33,10 @@ import {
 } from "./task.controller";
 
 const taskRouter = Router();
+
+// Apply auth middleware and load permissions for all routes
+taskRouter.use(verifyAuthToken);
+taskRouter.use(loadUserPermissions());
 
 // Configure multer for memory storage (no disk storage)
 const storage = multer.memoryStorage();
@@ -50,94 +60,181 @@ const upload = multer({
 // ============================================================================
 
 // Get all tasks with filtering and pagination
-taskRouter.get('/', verifyAuthToken, getTasks);
+// Requires: Task:read permission
+taskRouter.get('/',
+  requirePermission(RESOURCES.TASK, OPERATIONS.READ),
+  getTasks
+);
 
 // Get tasks with filters from request body
-taskRouter.post('/list', listTasks);
+// Requires: Task:read permission
+taskRouter.post('/list',
+  requirePermission(RESOURCES.TASK, OPERATIONS.READ),
+  listTasks
+);
 
 // Get single task by ID
-taskRouter.get('/:id', getTaskById);
+// Requires: Task:read permission
+taskRouter.get('/:id',
+  requirePermission(RESOURCES.TASK, OPERATIONS.READ),
+  getTaskById
+);
 
 // Get task status history
-taskRouter.get('/:id/status-history', getTaskStatusHistory);
+// Requires: Task:read permission
+taskRouter.get('/:id/status-history',
+  requirePermission(RESOURCES.TASK, OPERATIONS.READ),
+  getTaskStatusHistory
+);
 
 // Create new task
-taskRouter.post('/', verifyAuthToken, createTask);
+// Requires: Task:create permission
+taskRouter.post('/',
+  requirePermission(RESOURCES.TASK, OPERATIONS.CREATE),
+  createTask
+);
 
 // Update task
-taskRouter.put('/:id', updateTask);
+// Requires: Task:update permission
+taskRouter.put('/:id',
+  requirePermission(RESOURCES.TASK, OPERATIONS.UPDATE),
+  updateTask
+);
 
 // Delete task (soft delete)
-taskRouter.delete('/:id', deleteTask);
+// Requires: Task:delete permission
+taskRouter.delete('/:id',
+  requirePermission(RESOURCES.TASK, OPERATIONS.DELETE),
+  deleteTask
+);
 
 // Get available statuses for a task
-taskRouter.get('/:id/available-statuses', getAvailableStatusesForTaskType);
+// Requires: Task:read permission
+taskRouter.get('/:id/available-statuses',
+  requirePermission(RESOURCES.TASK, OPERATIONS.READ),
+  getAvailableStatusesForTaskType
+);
 
 // ============================================================================
 // TASK ASSIGNMENT OPERATIONS
 // ============================================================================
 
 // Assign task to users/groups
-taskRouter.post('/:id/assign', assignTask);
+// Requires: Task:assign permission
+taskRouter.post('/:id/assign',
+  requirePermission(RESOURCES.TASK, OPERATIONS.ASSIGN),
+  assignTask
+);
 
 // Unassign task from users/groups
-taskRouter.post('/:id/unassign', unassignTask);
+// Requires: Task:assign permission
+taskRouter.post('/:id/unassign',
+  requirePermission(RESOURCES.TASK, OPERATIONS.ASSIGN),
+  unassignTask
+);
 
 // ============================================================================
 // TASK STATUS OPERATIONS
 // ============================================================================
 
 // Mark task as completed
-taskRouter.patch('/:id/complete', markTaskAsCompleted);
+// Requires: Task:update permission
+taskRouter.patch('/:id/complete',
+  requirePermission(RESOURCES.TASK, OPERATIONS.UPDATE),
+  markTaskAsCompleted
+);
 
 // Reopen completed task
-taskRouter.patch('/:id/reopen', reopenTask);
+// Requires: Task:update permission
+taskRouter.patch('/:id/reopen',
+  requirePermission(RESOURCES.TASK, OPERATIONS.UPDATE),
+  reopenTask
+);
 
 // ============================================================================
 // TASK ESCALATION OPERATIONS
 // ============================================================================
 
 // Manually escalate task
-taskRouter.post('/:id/escalate', escalateTask);
+// Requires: Task:escalate permission
+taskRouter.post('/:id/escalate',
+  requirePermission(RESOURCES.TASK, OPERATIONS.ESCALATE),
+  escalateTask
+);
 
-// Process automatic escalations (system endpoint)
-taskRouter.post('/system/process-escalations', processEscalations);
+// Process automatic escalations (system endpoint - requires manage permission)
+taskRouter.post('/system/process-escalations',
+  requirePermission(RESOURCES.TASK, OPERATIONS.MANAGE),
+  processEscalations
+);
 
 // ============================================================================
 // SUBTASK OPERATIONS
 // ============================================================================
 
 // Get all subtasks of a parent task
-taskRouter.get('/:id/subtasks', getSubtasks);
+// Requires: Task:read permission
+taskRouter.get('/:id/subtasks',
+  requirePermission(RESOURCES.TASK, OPERATIONS.READ),
+  getSubtasks
+);
 
 // Create subtask under a parent task
-taskRouter.post('/:id/subtasks', createSubtask);
-
+// Requires: Task:create permission
+taskRouter.post('/:id/subtasks',
+  requirePermission(RESOURCES.TASK, OPERATIONS.CREATE),
+  createSubtask
+);
 
 // Duplicate task
-taskRouter.post('/:id/duplicate', duplicateTask);
+// Requires: Task:create permission
+taskRouter.post('/:id/duplicate',
+  requirePermission(RESOURCES.TASK, OPERATIONS.CREATE),
+  duplicateTask
+);
 
 // ============================================================================
 // DATA OPERATIONS
 // ============================================================================
 
 // Import tasks from CSV
-taskRouter.post('/import/csv', upload.single('file'), importFromCsv);
+// Requires: Task:import permission
+taskRouter.post('/import/csv',
+  requirePermission(RESOURCES.TASK, OPERATIONS.IMPORT),
+  upload.single('file'),
+  importFromCsv
+);
 
 // ============================================================================
 // RECURRENCE MANAGEMENT OPERATIONS  
 // ============================================================================
 
 // Create recurrence rule
-taskRouter.post('/recurrence', createRecurrence);
+// Requires: Task:create permission
+taskRouter.post('/recurrence',
+  requirePermission(RESOURCES.TASK, OPERATIONS.CREATE),
+  createRecurrence
+);
 
 // Get recurrence rule by ID
-taskRouter.get('/recurrence/:id', getRecurrence);
+// Requires: Task:read permission
+taskRouter.get('/recurrence/:id',
+  requirePermission(RESOURCES.TASK, OPERATIONS.READ),
+  getRecurrence
+);
 
 // Update recurrence rule
-taskRouter.put('/recurrence/:id', updateRecurrence);
+// Requires: Task:update permission
+taskRouter.put('/recurrence/:id',
+  requirePermission(RESOURCES.TASK, OPERATIONS.UPDATE),
+  updateRecurrence
+);
 
 // Delete recurrence rule
-taskRouter.delete('/recurrence/:id', deleteRecurrence);
+// Requires: Task:delete permission
+taskRouter.delete('/recurrence/:id',
+  requirePermission(RESOURCES.TASK, OPERATIONS.DELETE),
+  deleteRecurrence
+);
 
 export default taskRouter;

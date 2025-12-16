@@ -9,9 +9,11 @@ import { Button } from "@/components/ui/button"
 import CreateTask from "@/components/task-page/create-task"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Loader2, AlertCircle, RefreshCw } from "lucide-react"
+import { Loader2, AlertCircle, RefreshCw, Shield } from "lucide-react"
 import { useAppDispatch, useAppSelector } from "@/lib/hooks"
 import { fetchTasks } from "@/lib/features/tasks/tasksSlice"
+import { useRBAC, PERMISSIONS } from "@/lib/rbac"
+import { CanCreateTask, AdminOnly } from "@/components/rbac"
 
 export default function Home() {
   const { data: session, status } = useSession()
@@ -20,22 +22,30 @@ export default function Home() {
   const { tasks, loading, error } = useAppSelector((state) => state.tasks)
   const [activeTab, setActiveTab] = useState('all')
 
+  // RBAC hooks for permission checking
+  const { can, getHighestRole, isAdmin } = useRBAC()
+
   const loadTasks = useCallback(() => {
     if (session?.user?.token) {
       dispatch(fetchTasks({ token: session.user.token, status: activeTab }))
     }
   }, [dispatch, session?.user?.token, activeTab])
 
+  // Handle authentication redirect
   useEffect(() => {
     if (status === "loading") return
 
     if (!session) {
       router.push('/signin')
-      return
     }
+  }, [session, status, router])
 
-    loadTasks()
-  }, [session, status, router, loadTasks])
+  // Load tasks when authenticated or when activeTab changes
+  useEffect(() => {
+    if (status === "authenticated" && session?.user?.token) {
+      dispatch(fetchTasks({ token: session.user.token, status: activeTab }))
+    }
+  }, [dispatch, status, session?.user?.token, activeTab])
 
   const handleRetry = () => {
     loadTasks()
@@ -76,6 +86,8 @@ export default function Home() {
     )
   }
 
+  const highestRole = getHighestRole()
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
       <div className="container mx-auto px-4 py-6 max-w-7xl">
@@ -89,19 +101,42 @@ export default function Home() {
               <p className="text-gray-600 dark:text-gray-400 mt-1">
                 Welcome back, {session?.user?.name || 'User'}! Manage your tasks efficiently.
               </p>
+              {/* Display user role badge */}
+              {highestRole && (
+                <div className="flex items-center gap-2 mt-2">
+                  <Shield className="h-4 w-4 text-blue-600" />
+                  <span className="text-sm font-medium text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/30 px-2 py-1 rounded-full">
+                    {highestRole}
+                  </span>
+                  {isAdmin() && (
+                    <span className="text-xs text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900/30 px-2 py-0.5 rounded">
+                      Full Access
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
             <div className="flex flex-col sm:flex-row gap-3">
-              <CreateTask onTaskCreated={loadTasks} />
-              <div className="hidden sm:block">
-                <UploadFromCSV onSuccess={loadTasks} />
-              </div>
+              {/* Only show Create Task button if user has permission */}
+              <CanCreateTask>
+                <CreateTask onTaskCreated={loadTasks} />
+              </CanCreateTask>
+
+              {/* Only show CSV Import if user has import permission */}
+              {can(PERMISSIONS.TASK_IMPORT) && (
+                <div className="hidden sm:block">
+                  <UploadFromCSV onSuccess={loadTasks} />
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Mobile Upload Button */}
-          <div className="sm:hidden mb-4">
-            <UploadFromCSV onSuccess={loadTasks} />
-          </div>
+          {/* Mobile Upload Button - only if has import permission */}
+          {can(PERMISSIONS.TASK_IMPORT) && (
+            <div className="sm:hidden mb-4">
+              <UploadFromCSV onSuccess={loadTasks} />
+            </div>
+          )}
         </div>
 
         {/* Main Content */}
@@ -139,3 +174,4 @@ export default function Home() {
     </div>
   )
 }
+

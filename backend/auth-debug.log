@@ -1,0 +1,28 @@
+============================================================
+AUTH FLOW DEBUG SCRIPT
+============================================================
+JWT_SECRET loaded: YES
+
+[Step 1] Testing Login...
+  Login successful
+  User ID: 3
+  User roles: ["General"]
+  Permissions: ["Task:create","Task:read","Task:update","User:read","Group:read"]
+  TOKEN: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MywiZW1haWwiOiJhZG1pbkB0YXNrbWFuYWdlci5jb20iLCJuYW1lIjoiYWRtaW5AdGFza21hbmFnZXIuY29tIiwicm9sZXMiOlsiR2VuZXJhbCJdLCJwZXJtaXNzaW9ucyI6WyJUYXNrOmNyZWF0ZSIsIlRhc2s6cmVhZCIsIlRhc2s6dXBkYXRlIiwiVXNlcjpyZWFkIiwiR3JvdXA6cmVhZCJdLCJpYXQiOjE3NjU2MjE5OTYsImV4cCI6MTc2NTY2NTE5Nn0.RWTNQjFyWOMjikWIdU2g3gHCXSoczgOD2EKyvkZlhKA
+
+[Step 2] Decoding JWT Token...
+  Token ID: 3
+  Token email: admin@taskmanager.com
+
+[Step 3] Local token verification with JWT_SECRET...
+  Token verification: SUCCESS
+
+[Step 4] Testing /tasks endpoint...
+  Sending request with Authorization: Bearer <token>
+  Also sending X-Debug-Request: test-auth-script
+  /tasks request: SUCCESS
+  Status: 200
+
+============================================================
+DEBUG COMPLETE
+============================================================

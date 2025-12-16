@@ -1,4 +1,5 @@
 import prisma from "../../lib/connection";
+import { rbacClient } from "../../lib/rbac-client";
 import { getStatusesForTaskType } from "./task-type.service";
 import {
   EDITABLE_TASK_FIELDS,
@@ -383,21 +384,81 @@ export async function getTaskById(taskId: number): Promise<TaskResponse | null> 
   }
 
   return await enhanceTaskWithDetails(task);
-} async function enhanceTaskWithDetails(task: any): Promise<TaskResponse> {
-  // Get assignees
+}
+
+// Cache for user IDs from RBAC service to reduce API calls
+let rbacUsersCache: Map<number, { id: number; name: string; email: string }> | null = null;
+let rbacUsersCacheTime: number = 0;
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache
+
+async function getRbacUserById(userId: number): Promise<{ Id: number; Name: string; Email: string } | null> {
+  // Check if cache is still valid
+  if (rbacUsersCache && Date.now() - rbacUsersCacheTime < CACHE_TTL) {
+    const cached = rbacUsersCache.get(userId);
+    if (cached) {
+      return { Id: cached.id, Name: cached.name, Email: cached.email };
+    }
+  }
+
+  // Try to fetch from RBAC API
+  if (rbacClient.isReady()) {
+    try {
+      // Refresh the entire user cache
+      const response = await rbacClient.getAllUsers();
+      if (response.success && response.data) {
+        rbacUsersCache = new Map();
+        rbacUsersCacheTime = Date.now();
+
+        for (const user of response.data) {
+          rbacUsersCache.set(user.id, {
+            id: user.id,
+            name: user.name || user.username || user.email,
+            email: user.email
+          });
+        }
+
+        const cached = rbacUsersCache.get(userId);
+        if (cached) {
+          return { Id: cached.id, Name: cached.name, Email: cached.email };
+        }
+      }
+    } catch (error) {
+      console.warn('[Task Service] Failed to fetch user from RBAC:', error);
+    }
+  }
+
+  return null;
+}
+
+async function enhanceTaskWithDetails(task: any): Promise<TaskResponse> {
+  // Get task assignee links (just IDs, not user details)
   const taskAssignees = await prisma.taskassignees.findMany({
     where: { TaskId: task.Id },
     include: {
-      assignees: true,
+      assignees: true, // Still include as fallback
       groupmaster: true
     }
   });
 
-  const assignees = taskAssignees.filter(ta => ta.AssigneeId).map(ta => ({
-    Id: Number(ta.assignees!.Id),
-    Name: ta.assignees!.Name,
-    Email: ta.assignees!.Email
-  }));
+  // Fetch assignee details from RBAC API where possible
+  const assignees: { Id: number; Name: string; Email: string }[] = [];
+
+  for (const ta of taskAssignees) {
+    if (ta.AssigneeId) {
+      // Try to get from RBAC first
+      const rbacUser = await getRbacUserById(Number(ta.AssigneeId));
+      if (rbacUser) {
+        assignees.push(rbacUser);
+      } else if (ta.assignees) {
+        // Fallback to Prisma data
+        assignees.push({
+          Id: Number(ta.assignees.Id),
+          Name: ta.assignees.Name,
+          Email: ta.assignees.Email
+        });
+      }
+    }
+  }
 
   const groups = taskAssignees.filter(ta => ta.GroupId).map(ta => ({
     GroupId: Number(ta.groupmaster!.GroupId),

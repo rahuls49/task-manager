@@ -1,17 +1,30 @@
 import NextAuth, { DefaultSession } from "next-auth"
 import CredentialsProvider from "next-auth/providers/credentials"
+import { JWT } from "next-auth/jwt"
 
 declare module "next-auth" {
   interface User {
+    id: string
     token: string
+    roles?: string[]
+    permissions?: string[]
   }
   interface Session {
     user: {
+      id: string
       token: string
+      roles: string[]
+      permissions: string[]
     } & DefaultSession["user"]
   }
+}
+
+declare module "next-auth/jwt" {
   interface JWT {
-    token: string
+    id?: string
+    token?: string
+    roles?: string[]
+    permissions?: string[]
   }
 }
 
@@ -29,8 +42,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         }
 
         try {
-          // Replace 'YOUR_CUSTOM_API_ENDPOINT' with your actual API endpoint
-          // Example: 'https://your-api.com/auth/login'
           const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/auth/login`, {
             method: 'POST',
             headers: {
@@ -48,15 +59,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
           const data = await response.json()
 
-          // Assuming your API returns { user: { id, email, name }, token: "jwt_token" }
-          // Adjust according to your API response structure
+          // API returns: { user: { id, email, name, roles, permissions }, token: "jwt_token" }
           if (data.user && data.token) {
             return {
-              id: data.user.id,
+              id: String(data.user.id),
               email: data.user.email,
               name: data.user.name,
-              // Store the JWT token in the user object
               token: data.token,
+              // Include roles and permissions from backend
+              roles: data.user.roles || ['General'],
+              permissions: data.user.permissions || [],
             }
           }
 
@@ -71,17 +83,23 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
+        token.id = user.id
         token.token = user.token
+        token.roles = user.roles || ['General']
+        token.permissions = user.permissions || []
       }
       return token
     },
     async session({ session, token }) {
-      session.user.token = token.token as string
+      session.user.id = (token.id as string) || ''
+      session.user.token = (token.token as string) || ''
+      session.user.roles = (token.roles as string[]) || ['General']
+      session.user.permissions = (token.permissions as string[]) || []
       return session
     }
   },
   pages: {
-    signIn: '/signin', // Customize if you have a sign-in page
+    signIn: '/signin',
   },
   trustHost: true,
 })

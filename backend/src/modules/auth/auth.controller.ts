@@ -20,13 +20,13 @@ export async function signup(req: Request, res: Response) {
       });
     }
 
-    const { user, accessToken } = await authService.signup(name, email, phone, password);
+    const { user, token } = await authService.signup(name, email, phone, password);
 
     return res.status(201).json({
       success: true,
       message: 'User created successfully',
       user,
-      token: accessToken
+      token
     });
   } catch (error: any) {
     console.error('Signup error:', error);
@@ -39,22 +39,24 @@ export async function signup(req: Request, res: Response) {
 
 export async function login(req: Request, res: Response) {
   try {
-    const { emailOrPhone, password } = req.body;
+    // Accept both 'emailOrPhone' (legacy) and 'identifier' (new) 
+    const identifier = req.body.emailOrPhone || req.body.identifier;
+    const { password } = req.body;
 
-    if (!emailOrPhone || !password) {
+    if (!identifier || !password) {
       return res.status(400).json({
         success: false,
-        message: 'Email/Phone and password are required'
+        message: 'Email/Phone/Username and password are required'
       });
     }
 
-    const { user, accessToken } = await authService.login(emailOrPhone, password);
+    const { user, token } = await authService.login(identifier, password);
 
     return res.status(200).json({
       success: true,
       message: 'Login successful',
       user,
-      token: accessToken
+      token
     });
   } catch (error: any) {
     console.error('Login error:', error);
