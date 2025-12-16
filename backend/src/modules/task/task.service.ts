@@ -745,7 +745,11 @@ export async function createTask(data: CreateTaskDto, userId?: number | null): P
 
   // Trigger task-specific API actions based on initial task state
   if (data.assigneeIds && data.assigneeIds.length > 0 || data.groupIds && data.groupIds.length > 0) {
-    await actionService.triggerApiActionsForEvent(taskId, TaskActionEvent.TASK_ASSIGNED, createdTask);
+    await actionService.triggerApiActionsForEvent(taskId, TaskActionEvent.TASK_ASSIGNED, {
+      ...createdTask,
+      addedAssigneeIds: data.assigneeIds || [],
+      addedGroupIds: data.groupIds || []
+    });
   }
 
   if (createdTask && createdTask.StatusId === TASK_STATUS.IN_PROGRESS) {
@@ -952,8 +956,9 @@ export async function updateTask(taskId: number, data: UpdateTaskDto, userId?: n
   }
 
   // Update assignees if provided
+  let assignmentChanges: { added: { assigneeIds: number[], groupIds: number[] }, removed: { assigneeIds: number[], groupIds: number[] } } | null = null;
   if (data.assigneeIds || data.groupIds) {
-    await assignTaskToUsers(taskId, {
+    assignmentChanges = await assignTaskToUsers(taskId, {
       assigneeIds: data.assigneeIds,
       groupIds: data.groupIds
     });
@@ -999,9 +1004,26 @@ export async function updateTask(taskId: number, data: UpdateTaskDto, userId?: n
     await actionService.triggerApiActionsForEvent(taskId, TaskActionEvent.TASK_START_TIME_CHANGED, updatedTask);
   }
 
-  // Trigger task-specific API actions for assignee change
-  if (data.assigneeIds !== undefined || data.groupIds !== undefined) {
-    await actionService.triggerApiActionsForEvent(taskId, TaskActionEvent.TASK_ASSIGNED, updatedTask);
+  // Trigger task-specific API actions for assignee changes
+  if (assignmentChanges) {
+    // Trigger TASK_UNASSIGNED if any were removed
+    if (assignmentChanges.removed.assigneeIds.length > 0 || assignmentChanges.removed.groupIds.length > 0) {
+      await actionService.triggerApiActionsForEvent(taskId, TaskActionEvent.TASK_UNASSIGNED, {
+        ...updatedTask,
+        removedAssigneeIds: assignmentChanges.removed.assigneeIds,
+        removedGroupIds: assignmentChanges.removed.groupIds
+      });
+    }
+
+
+    // Trigger TASK_ASSIGNED if any were added
+    if (assignmentChanges.added.assigneeIds.length > 0 || assignmentChanges.added.groupIds.length > 0) {
+      await actionService.triggerApiActionsForEvent(taskId, TaskActionEvent.TASK_ASSIGNED, {
+        ...updatedTask,
+        addedAssigneeIds: assignmentChanges.added.assigneeIds,
+        addedGroupIds: assignmentChanges.added.groupIds
+      });
+    }
   }
 
   // Trigger task-specific API actions for task_updated event
@@ -1317,7 +1339,7 @@ export async function assignTask(taskId: number, assignData: AssignTaskDto, user
     throw new Error(ERROR_MESSAGES.TASK_NOT_FOUND);
   }
 
-  await assignTaskToUsers(taskId, assignData);
+  const changes = await assignTaskToUsers(taskId, assignData);
 
   const updatedTask = await getTaskById(taskId);
 
@@ -1327,22 +1349,63 @@ export async function assignTask(taskId: number, assignData: AssignTaskDto, user
     event: TASK_EVENTS.ASSIGNED,
     userId,
     timestamp: new Date(),
-    metadata: { assigneeIds: assignData.assigneeIds, groupIds: assignData.groupIds }
+    metadata: {
+      assigneeIds: assignData.assigneeIds,
+      groupIds: assignData.groupIds,
+      added: changes.added,
+      removed: changes.removed
+    }
   }, updatedTask || task);
 
-  // Trigger task-specific API actions for task_assigned event
-  await actionService.triggerApiActionsForEvent(taskId, TaskActionEvent.TASK_ASSIGNED, updatedTask);
+  // Trigger task-specific API actions for task_unassigned event (if any were removed)
+  if (changes.removed.assigneeIds.length > 0 || changes.removed.groupIds.length > 0) {
+    await actionService.triggerApiActionsForEvent(taskId, TaskActionEvent.TASK_UNASSIGNED, {
+      ...updatedTask,
+      removedAssigneeIds: changes.removed.assigneeIds,
+      removedGroupIds: changes.removed.groupIds
+    });
+  }
+
+  // Trigger task-specific API actions for task_assigned event (if any were added)
+  if (changes.added.assigneeIds.length > 0 || changes.added.groupIds.length > 0) {
+    await actionService.triggerApiActionsForEvent(taskId, TaskActionEvent.TASK_ASSIGNED, {
+      ...updatedTask,
+      addedAssigneeIds: changes.added.assigneeIds,
+      addedGroupIds: changes.added.groupIds
+    });
+  }
 }
 
-async function assignTaskToUsers(taskId: number, assignData: AssignTaskDto): Promise<void> {
+async function assignTaskToUsers(taskId: number, assignData: AssignTaskDto): Promise<{ added: { assigneeIds: number[], groupIds: number[] }, removed: { assigneeIds: number[], groupIds: number[] } }> {
+  // Get existing assignments first
+  const existingAssignments = await prisma.taskassignees.findMany({
+    where: { TaskId: taskId }
+  });
+
+  const existingAssigneeIds = existingAssignments
+    .filter(a => a.AssigneeId)
+    .map(a => Number(a.AssigneeId));
+  const existingGroupIds = existingAssignments
+    .filter(a => a.GroupId)
+    .map(a => Number(a.GroupId));
+
+  const newAssigneeIds = assignData.assigneeIds || [];
+  const newGroupIds = assignData.groupIds || [];
+
+  // Calculate what's being added and removed
+  const addedAssigneeIds = newAssigneeIds.filter(id => !existingAssigneeIds.includes(id));
+  const removedAssigneeIds = existingAssigneeIds.filter(id => !newAssigneeIds.includes(id));
+  const addedGroupIds = newGroupIds.filter(id => !existingGroupIds.includes(id));
+  const removedGroupIds = existingGroupIds.filter(id => !newGroupIds.includes(id));
+
   // Remove existing assignments
   await prisma.taskassignees.deleteMany({
     where: { TaskId: taskId }
   });
 
   // Add new user assignments
-  if (assignData.assigneeIds && assignData.assigneeIds.length > 0) {
-    for (const assigneeId of assignData.assigneeIds) {
+  if (newAssigneeIds.length > 0) {
+    for (const assigneeId of newAssigneeIds) {
       await prisma.taskassignees.create({
         data: {
           TaskId: taskId,
@@ -1353,8 +1416,8 @@ async function assignTaskToUsers(taskId: number, assignData: AssignTaskDto): Pro
   }
 
   // Add new group assignments
-  if (assignData.groupIds && assignData.groupIds.length > 0) {
-    for (const groupId of assignData.groupIds) {
+  if (newGroupIds.length > 0) {
+    for (const groupId of newGroupIds) {
       await prisma.taskassignees.create({
         data: {
           TaskId: taskId,
@@ -1363,6 +1426,11 @@ async function assignTaskToUsers(taskId: number, assignData: AssignTaskDto): Pro
       });
     }
   }
+
+  return {
+    added: { assigneeIds: addedAssigneeIds, groupIds: addedGroupIds },
+    removed: { assigneeIds: removedAssigneeIds, groupIds: removedGroupIds }
+  };
 }
 
 export async function unassignTask(taskId: number, assigneeId?: number, groupId?: number, userId?: number): Promise<void> {
