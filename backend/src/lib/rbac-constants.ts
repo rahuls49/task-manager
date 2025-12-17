@@ -170,6 +170,8 @@ export const ROLE_PERMISSIONS: Record<RoleName, Permission[]> = {
         PERMISSIONS.TASK_READ,
         PERMISSIONS.TASK_UPDATE,
         PERMISSIONS.TASK_DELETE,  // Temporary: Added until admin users can be properly assigned Admin role in RBAC
+        PERMISSIONS.TASK_ASSIGN,  // Temporary: Added until admin users can be properly assigned Admin role in RBAC
+        PERMISSIONS.TASK_ESCALATE,  // Temporary: Added until admin users can be properly assigned Admin role in RBAC
         PERMISSIONS.USER_READ,
         PERMISSIONS.GROUP_READ,
     ],

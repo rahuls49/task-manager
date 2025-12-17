@@ -170,6 +170,8 @@ export const ROLE_PERMISSIONS: Record<RoleName, Permission[]> = {
         PERMISSIONS.TASK_READ,
         PERMISSIONS.TASK_UPDATE,
         PERMISSIONS.TASK_DELETE,  // Matches backend temporary fix
+        PERMISSIONS.TASK_ASSIGN,  // Matches backend temporary fix
+        PERMISSIONS.TASK_ESCALATE,  // Matches backend temporary fix
         PERMISSIONS.USER_READ,
         PERMISSIONS.GROUP_READ,
     ],
