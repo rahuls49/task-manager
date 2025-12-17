@@ -76,6 +76,11 @@ export async function getTasks(req: Request, res: Response, next: NextFunction) 
       }
     }
 
+    // Parse isSubTask filter to exclude subtasks from main listing
+    if (req.query.isSubTask !== undefined) {
+      filters.isSubTask = req.query.isSubTask === 'true';
+    }
+
     const result = await taskService.getTasks(userId, page, limit, filters);
 
     return res.json({

@@ -18,8 +18,15 @@ export const fetchTasks = createAsyncThunk(
     'tasks/fetchTasks',
     async ({ token, status }: { token: string; status: string }, { rejectWithValue }) => {
         try {
-            const queryParams = status === 'all' ? '' : `?status=${status}`;
-            const response = await axios.get(`${process.env.NEXT_PUBLIC_API_BASE_URL}/tasks${queryParams}`, {
+            // Build query params - always exclude subtasks (isSubTask=false) on main listing
+            const params = new URLSearchParams();
+            if (status !== 'all') {
+                params.append('status', status);
+            }
+            params.append('isSubTask', 'false'); // Only show parent tasks, not subtasks
+
+            const queryString = params.toString() ? `?${params.toString()}` : '';
+            const response = await axios.get(`${process.env.NEXT_PUBLIC_API_BASE_URL}/tasks${queryString}`, {
                 headers: {
                     Authorization: `Bearer ${token}`,
                 },
