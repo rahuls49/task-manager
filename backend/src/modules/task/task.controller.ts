@@ -200,6 +200,8 @@ export async function updateTask(req: Request, res: Response, next: NextFunction
     const updateData: UpdateTaskDto = req.body;
     const userId = req.user?.id ? parseInt(req.user.id as string) : undefined;
 
+    console.log('[updateTask] Request:', { taskId, updateData, userId });
+
     await taskService.updateTask(taskId, updateData, userId);
     const updatedTask = await taskService.getTaskById(taskId);
 
@@ -209,6 +211,7 @@ export async function updateTask(req: Request, res: Response, next: NextFunction
       data: serializeBigInt(updatedTask)
     });
   } catch (error) {
+    console.error('[updateTask] Error:', error);
     if (error instanceof Error) {
       if (error.message.includes('Validation failed') ||
         error.message.includes('not found') ||
@@ -218,6 +221,11 @@ export async function updateTask(req: Request, res: Response, next: NextFunction
           message: error.message
         });
       }
+      // Return 500 with actual error message for debugging
+      return res.status(500).json({
+        success: false,
+        message: error.message
+      });
     }
     next(error);
   }
@@ -434,11 +442,20 @@ export async function createSubtask(req: Request, res: Response, next: NextFunct
       data: serializeBigInt(createdTask)
     });
   } catch (error) {
-    if (error instanceof Error && error.message.includes('Validation failed')) {
-      return res.status(400).json({
-        success: false,
-        message: error.message
-      });
+    if (error instanceof Error) {
+      const errorMessages = [
+        'Validation failed',
+        'Subtask due date',
+        'not found',
+        'Maximum task hierarchy',
+        'Invalid parent'
+      ];
+      if (errorMessages.some(msg => error.message.includes(msg))) {
+        return res.status(400).json({
+          success: false,
+          message: error.message
+        });
+      }
     }
     next(error);
   }

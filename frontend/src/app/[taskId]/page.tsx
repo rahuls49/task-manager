@@ -11,6 +11,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import EscalateButton from "./escalate-button"
 import { EditTaskButton } from "./edit-task-button"
 import { StatusHistory } from "./status-history"
+import SubtaskSection from "./subtask-section"
 
 export default async function TaskPage({
     params,
@@ -89,6 +90,11 @@ export default async function TaskPage({
                                 <p className="text-slate-600 dark:text-slate-300 leading-relaxed text-lg">
                                     {taskData.Description}
                                 </p>
+
+                                {/* Subtasks Section */}
+                                <div className="pt-8">
+                                    <SubtaskSection parentTask={taskData} subtasks={taskData.subtasks || []} />
+                                </div>
 
                                 <div className="pt-8">
                                     <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Status History</h2>
