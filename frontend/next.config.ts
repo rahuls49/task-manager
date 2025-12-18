@@ -1,12 +1,23 @@
-/** @type {import('next').NextConfig} */
-/** import withPWA from "next-pwa"; */
+import type { NextConfig } from "next";
+import withPWAInit from "@ducanh2912/next-pwa";
 
-// const nextConfig = withPWA({
-//   dest: "public",
-//   register: true,
-//   skipWaiting: true,
-// });
+const withPWA = withPWAInit({
+    dest: "public",
+    cacheOnFrontEndNav: true,
+    aggressiveFrontEndNavCaching: true,
+    reloadOnOnline: true,
+    disable: false,
+    workboxOptions: {
+        disableDevLogs: true,
+    },
+    fallbacks: {
+        document: "/~offline",
+    },
+});
 
-const nextConfig = {};
+const nextConfig: NextConfig = {
+    // Add empty turbopack config to allow both webpack and turbopack builds
+    turbopack: {},
+};
 
-export default nextConfig;
+export default withPWA(nextConfig);
