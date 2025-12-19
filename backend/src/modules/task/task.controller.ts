@@ -92,6 +92,11 @@ export async function getTasks(req: Request, res: Response, next: NextFunction) 
       }
     }
 
+    // Parse search query
+    if (req.query.search) {
+      filters.search = req.query.search as string;
+    }
+
     const result = await taskService.getTasks(userId, page, limit, filters);
 
     return res.json({

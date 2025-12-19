@@ -255,6 +255,7 @@ export interface TaskFilters {
   escalated?: boolean;
   parentTaskId?: number;
   isSubTask?: boolean;
+  search?: string; // Search by title or description
 }
 
 // Task Events

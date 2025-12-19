@@ -262,6 +262,15 @@ export async function getTasks(userId: number, page: number = 1, limit: number =
     }
   }
 
+  // Search by title or description (case-insensitive)
+  if (filters?.search && filters.search.trim()) {
+    const searchTerm = filters.search.trim();
+    where.OR = [
+      { Title: { contains: searchTerm } },
+      { Description: { contains: searchTerm } }
+    ];
+  }
+
   const total = await prisma.tasks.count({ where });
 
   const tasks = await prisma.tasks.findMany({
