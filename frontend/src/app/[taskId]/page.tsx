@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth"
 import axios from "axios"
 import { redirect } from "next/navigation"
 import StatusSection from "./status"
+import PrioritySection from "./priority-section"
 import { formatDate, formatTime } from "@/lib/convert-to-ist"
 import DueBanner from "./due-banner"
 import Link from "next/link"
@@ -36,6 +37,14 @@ export default async function TaskPage({
             Authorization: `Bearer ${session?.user?.token}`
         }
     })
+    const priorities = await axios.get(`${process.env.NEXT_PUBLIC_API_BASE_URL}/management/priorities`, {
+        headers: {
+            Authorization: `Bearer ${session?.user?.token}`
+        }
+    }).catch(err => {
+        console.error('Failed to fetch priorities:', err.message);
+        return { data: { data: [] } };
+    });
     const history = await axios.get(`${process.env.NEXT_PUBLIC_API_BASE_URL}/tasks/${taskId}/status-history`, {
         headers: {
             Authorization: `Bearer ${session?.user?.token}`
@@ -44,6 +53,7 @@ export default async function TaskPage({
 
     const taskData: Task = task.data.data;
     const statusData = status.data.data;
+    const priorityData = priorities.data.data || [];
     const historyData = history.data.data;
 
     return (
@@ -70,7 +80,10 @@ export default async function TaskPage({
                                         {taskData.Title}
                                     </h1>
                                 </div>
-                                <StatusSection currentStatus={taskData.status} statuses={statusData} taskId={taskId} />
+                                <div className="flex flex-wrap items-center gap-4">
+                                    <StatusSection currentStatus={taskData.status} statuses={statusData} taskId={taskId} />
+                                    <PrioritySection currentPriority={taskData.priority} priorities={priorityData} taskId={taskId} />
+                                </div>
                             </div>
                             <div className="flex flex-col gap-4 md:w-auto w-full">
                                 <div className="flex gap-2">

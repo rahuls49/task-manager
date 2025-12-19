@@ -932,6 +932,10 @@ export async function updateTask(taskId: number, data: UpdateTaskDto, userId?: n
   if (data.statusId !== undefined) {
     updateData.StatusId = data.statusId;
   }
+  // Update priority if provided
+  if (data.priorityId !== undefined) {
+    updateData.PriorityId = data.priorityId;
+  }
   updateData.UpdatedAt = new Date();
   // console.log('🔍 updateData to apply:', updateData); // debug logging removed
 
