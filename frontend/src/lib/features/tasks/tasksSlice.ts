@@ -16,12 +16,15 @@ const initialState: TasksState = {
 
 export const fetchTasks = createAsyncThunk(
     'tasks/fetchTasks',
-    async ({ token, status }: { token: string; status: string }, { rejectWithValue }) => {
+    async ({ token, status, priority }: { token: string; status: string; priority?: number }, { rejectWithValue }) => {
         try {
             // Build query params - always exclude subtasks (isSubTask=false) on main listing
             const params = new URLSearchParams();
             if (status !== 'all') {
                 params.append('status', status);
+            }
+            if (priority !== undefined && priority !== 0) {
+                params.append('priority', priority.toString());
             }
             params.append('isSubTask', 'false'); // Only show parent tasks, not subtasks
 

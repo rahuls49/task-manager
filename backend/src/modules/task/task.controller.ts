@@ -81,6 +81,17 @@ export async function getTasks(req: Request, res: Response, next: NextFunction) 
       filters.isSubTask = req.query.isSubTask === 'true';
     }
 
+    // Parse priority filter
+    if (req.query.priority) {
+      const priority = req.query.priority as string;
+      if (!isNaN(parseInt(priority))) {
+        filters.priority = [parseInt(priority)];
+      } else if (priority.includes(',')) {
+        // Support multiple priorities: ?priority=1,2,3
+        filters.priority = priority.split(',').map(p => parseInt(p)).filter(p => !isNaN(p));
+      }
+    }
+
     const result = await taskService.getTasks(userId, page, limit, filters);
 
     return res.json({

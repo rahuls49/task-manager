@@ -9,11 +9,14 @@ import { Button } from "@/components/ui/button"
 import CreateTask from "@/components/task-page/create-task"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Loader2, AlertCircle, RefreshCw, Shield } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Loader2, AlertCircle, RefreshCw, Shield, Flag } from "lucide-react"
 import { useAppDispatch, useAppSelector } from "@/lib/hooks"
 import { fetchTasks } from "@/lib/features/tasks/tasksSlice"
 import { useRBAC, PERMISSIONS } from "@/lib/rbac"
-import { CanCreateTask, AdminOnly } from "@/components/rbac"
+import { CanCreateTask } from "@/components/rbac"
+import axios from "axios"
+import { Priority } from "./_types/task.types"
 
 export default function Home() {
   const { data: session, status } = useSession()
@@ -21,15 +24,42 @@ export default function Home() {
   const dispatch = useAppDispatch()
   const { tasks, loading, error } = useAppSelector((state) => state.tasks)
   const [activeTab, setActiveTab] = useState('all')
+  const [activePriority, setActivePriority] = useState<number>(0) // 0 = all priorities
+  const [priorities, setPriorities] = useState<Priority[]>([])
 
   // RBAC hooks for permission checking
   const { can, getHighestRole, isAdmin } = useRBAC()
 
+  // Fetch priorities on mount
+  useEffect(() => {
+    const fetchPriorities = async () => {
+      if (!session?.user?.token) return
+      try {
+        const response = await axios.get(
+          `${process.env.NEXT_PUBLIC_API_BASE_URL}/management/priorities`,
+          {
+            headers: {
+              Authorization: `Bearer ${session.user.token}`,
+            },
+          }
+        )
+        setPriorities(response.data.data || [])
+      } catch (err) {
+        console.error("Failed to fetch priorities:", err)
+      }
+    }
+    fetchPriorities()
+  }, [session?.user?.token])
+
   const loadTasks = useCallback(() => {
     if (session?.user?.token) {
-      dispatch(fetchTasks({ token: session.user.token, status: activeTab }))
+      dispatch(fetchTasks({
+        token: session.user.token,
+        status: activeTab,
+        priority: activePriority || undefined
+      }))
     }
-  }, [dispatch, session?.user?.token, activeTab])
+  }, [dispatch, session?.user?.token, activeTab, activePriority])
 
   // Handle authentication redirect
   useEffect(() => {
@@ -40,15 +70,34 @@ export default function Home() {
     }
   }, [session, status, router])
 
-  // Load tasks when authenticated or when activeTab changes
+  // Load tasks when authenticated or when filters change
   useEffect(() => {
     if (status === "authenticated" && session?.user?.token) {
-      dispatch(fetchTasks({ token: session.user.token, status: activeTab }))
+      dispatch(fetchTasks({
+        token: session.user.token,
+        status: activeTab,
+        priority: activePriority || undefined
+      }))
     }
-  }, [dispatch, status, session?.user?.token, activeTab])
+  }, [dispatch, status, session?.user?.token, activeTab, activePriority])
 
   const handleRetry = () => {
     loadTasks()
+  }
+
+  const getPriorityColor = (priorityName: string | undefined) => {
+    if (!priorityName) return ""
+    const name = priorityName.toLowerCase()
+    if (name.includes("high") || name.includes("urgent") || name.includes("critical")) {
+      return "text-red-500"
+    }
+    if (name.includes("medium") || name.includes("normal")) {
+      return "text-yellow-500"
+    }
+    if (name.includes("low")) {
+      return "text-green-500"
+    }
+    return ""
   }
 
   if (status === "loading") {
@@ -142,16 +191,58 @@ export default function Home() {
         {/* Main Content */}
         <Card className="shadow-lg">
           <CardHeader className="pb-4">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <CardTitle className="text-xl font-semibold">Your Tasks</CardTitle>
-              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full sm:w-auto">
-                <TabsList className="grid w-full grid-cols-2 sm:w-auto sm:grid-cols-4">
-                  <TabsTrigger value="all" className="text-sm">All</TabsTrigger>
-                  <TabsTrigger value="incompleted" className="text-sm">Incomplete</TabsTrigger>
-                  <TabsTrigger value="completed" className="text-sm">Completed</TabsTrigger>
-                  <TabsTrigger value="escalated" className="text-sm">Escalated</TabsTrigger>
-                </TabsList>
-              </Tabs>
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <CardTitle className="text-xl font-semibold">Your Tasks</CardTitle>
+                <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full sm:w-auto">
+                  <TabsList className="grid w-full grid-cols-2 sm:w-auto sm:grid-cols-4">
+                    <TabsTrigger value="all" className="text-sm">All</TabsTrigger>
+                    <TabsTrigger value="incompleted" className="text-sm">Incomplete</TabsTrigger>
+                    <TabsTrigger value="completed" className="text-sm">Completed</TabsTrigger>
+                    <TabsTrigger value="escalated" className="text-sm">Escalated</TabsTrigger>
+                  </TabsList>
+                </Tabs>
+              </div>
+
+              {/* Priority Filter */}
+              <div className="flex items-center gap-3">
+                <Flag className="h-4 w-4 text-gray-500" />
+                <span className="text-sm text-gray-600 dark:text-gray-400">Filter by Priority:</span>
+                <Select
+                  value={activePriority.toString()}
+                  onValueChange={(val) => setActivePriority(parseInt(val))}
+                >
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="All Priorities" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0">
+                      <div className="flex items-center gap-2">
+                        <Flag className="h-3 w-3 text-gray-400" />
+                        All Priorities
+                      </div>
+                    </SelectItem>
+                    {priorities.map((priority) => (
+                      <SelectItem key={priority.Id} value={priority.Id.toString()}>
+                        <div className="flex items-center gap-2">
+                          <Flag className={`h-3 w-3 ${getPriorityColor(priority.PriorityName)}`} />
+                          {priority.PriorityName}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {activePriority !== 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setActivePriority(0)}
+                    className="text-xs"
+                  >
+                    Clear
+                  </Button>
+                )}
+              </div>
             </div>
           </CardHeader>
           <CardContent className="p-0">
@@ -174,4 +265,3 @@ export default function Home() {
     </div>
   )
 }
-
