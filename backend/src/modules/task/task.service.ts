@@ -528,6 +528,7 @@ async function enhanceTaskWithDetails(task: any): Promise<TaskResponse> {
     DeletedAt: task.DeletedAt,
     CreatedAt: task.CreatedAt,
     UpdatedAt: task.UpdatedAt,
+    Points: task.Points ? Number(task.Points) : 0,
     assignees,
     groups,
     subtasks,
@@ -692,6 +693,7 @@ export async function createTask(data: CreateTaskDto, userId?: number | null): P
     StatusId: data.statusId,
     PriorityId: data.priorityId,
     ParentTaskId: data.parentTaskId,
+    Points: data.points || 0,
   };
 
   if (userId !== undefined) {
@@ -944,6 +946,10 @@ export async function updateTask(taskId: number, data: UpdateTaskDto, userId?: n
   // Update priority if provided
   if (data.priorityId !== undefined) {
     updateData.PriorityId = data.priorityId;
+  }
+  // Update points if provided
+  if (data.points !== undefined) {
+    updateData.Points = data.points;
   }
   updateData.UpdatedAt = new Date();
   // console.log('🔍 updateData to apply:', updateData); // debug logging removed

@@ -135,6 +135,7 @@ export interface Task {
   DeletedAt?: Date;
   CreatedAt: Date;
   UpdatedAt: Date;
+  Points?: number;
 }
 
 export interface TaskAssignee {
@@ -219,6 +220,7 @@ export interface CreateTaskDto {
   assigneeIds?: number[];
   groupIds?: number[];
   apiActions?: InlineApiActionDto[]; // API actions to trigger on task events
+  points?: number; // Task points/effort estimation
 }
 
 export interface UpdateTaskDto {
@@ -238,6 +240,7 @@ export interface UpdateTaskDto {
   assigneeIds?: number[];
   groupIds?: number[];
   apiActions?: InlineApiActionDto[]; // API actions to trigger on task events
+  points?: number; // Task points/effort estimation
 }
 
 export interface AssignTaskDto {

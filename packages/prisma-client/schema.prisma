@@ -293,6 +293,7 @@ model tasks {
   CreatedAt                              DateTime            @default(now()) @db.Timestamp(0)
   UpdatedAt                              DateTime            @default(now()) @db.Timestamp(0)
   CreatedBy                              BigInt?             @db.UnsignedBigInt
+  Points                                 Int?                @default(0)
   escalationhistory                      escalationhistory[]
   taskapiactions                         taskapiactions[]
   taskassignees                          taskassignees[]
@@ -401,7 +402,7 @@ model ApiActionDefinition {
   headers         Json?
   payloadTemplate Json?
   triggerEvent    TriggerEvent
-  taskId          BigInt?
+  taskId          BigInt?             @db.UnsignedBigInt
   task            tasks?              @relation(fields: [taskId], references: [Id])
   executions      ApiExecutionLog[]
 

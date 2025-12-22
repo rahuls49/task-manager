@@ -30,7 +30,8 @@ export interface Task {
     subtasks: Task[],
     status: Status,
     priority?: Priority,
-    apiActions?: TaskApiAction[]
+    apiActions?: TaskApiAction[],
+    Points?: number
 }
 
 export interface Assignee {

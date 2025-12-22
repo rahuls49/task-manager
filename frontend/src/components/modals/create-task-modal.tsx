@@ -66,6 +66,7 @@ const createTaskSchema = z.object({
     priorityId: z.string().optional(),
     assigneeIds: z.array(z.number()).optional(),
     groupIds: z.array(z.number()).optional(),
+    points: z.number().min(0).optional(),
 });
 
 type CreateTaskForm = z.infer<typeof createTaskSchema>;
@@ -141,6 +142,7 @@ export default function CreateTaskModal({ open, onOpenChange, onTaskCreated, tas
             priorityId: task?.PriorityId?.toString() || "",
             assigneeIds: [],
             groupIds: [],
+            points: task?.Points || 0,
         },
     });
 
@@ -208,6 +210,7 @@ export default function CreateTaskModal({ open, onOpenChange, onTaskCreated, tas
                     priorityId: task.PriorityId?.toString() || "",
                     assigneeIds: [],
                     groupIds: [],
+                    points: task.Points || 0,
                 });
             } else {
                 setSelectedAssignees([]);
@@ -238,6 +241,7 @@ export default function CreateTaskModal({ open, onOpenChange, onTaskCreated, tas
                     priorityId: "",
                     assigneeIds: [],
                     groupIds: [],
+                    points: 0,
                 });
             }
             setAssigneeSearch("");
@@ -316,6 +320,7 @@ export default function CreateTaskModal({ open, onOpenChange, onTaskCreated, tas
                 isRecurring: data.isRecurring || false,
                 recurrence: data.isRecurring && data.recurrenceType ? buildRecurrence(data) : undefined,
                 apiActions: apiActions.length > 0 ? apiActions : undefined,
+                points: data.points || 0,
             };
 
             // Clean up empty strings
@@ -842,6 +847,26 @@ export default function CreateTaskModal({ open, onOpenChange, onTaskCreated, tas
                                             ))}
                                         </SelectContent>
                                     </Select>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                        <FormField
+                            control={form.control}
+                            name="points"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Points (Effort Estimation)</FormLabel>
+                                    <FormControl>
+                                        <Input
+                                            type="number"
+                                            min="0"
+                                            placeholder="Enter task points (e.g., 1, 2, 3, 5, 8...)"
+                                            {...field}
+                                            value={field.value || 0}
+                                            onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                                        />
+                                    </FormControl>
                                     <FormMessage />
                                 </FormItem>
                             )}
